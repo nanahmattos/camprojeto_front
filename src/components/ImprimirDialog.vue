@@ -48,7 +48,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useQuasar } from 'quasar'
-import { useOficinaStore, tipoLabel } from '@/stores/oficina'
+import { useOficinaStore } from '@/stores/oficina'
 import { pct } from '@/utils/formato'
 
 const props = defineProps({
@@ -56,7 +56,7 @@ const props = defineProps({
   // texto do título: "O.S 0148", "3 O.S selecionadas"…
   alvo: { type: String, default: '' },
   // tipo de cliente da O.S, para saber se sai a coluna da taxa
-  tipoCliente: { type: String, default: '' }
+  tipoCliente: { type: [Number, String], default: '' }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -85,7 +85,7 @@ const opcoes = [
 
 const colunas = computed(() => {
   const taxa = props.tipoCliente ? store.taxaDoTipo(props.tipoCliente) : 0
-  const colTaxa = taxa > 0 ? ', total com taxa ' + tipoLabel(props.tipoCliente) + ' (+' + pct(taxa) + ')' : ''
+  const colTaxa = taxa > 0 ? ', total com taxa ' + store.tipoLabel(props.tipoCliente) + ' (+' + pct(taxa) + ')' : ''
   return {
     tecnico:
       'Cabeçalho (cliente, veículo, placa) · Peças: produto, código, qtd · Serviços: descrição, horas · Observações pós análise',

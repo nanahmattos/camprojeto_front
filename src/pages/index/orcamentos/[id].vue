@@ -21,7 +21,7 @@
           <q-input v-model="os.cliente" label="Cliente" placeholder="Nome do cliente" outlined dense class="col-12 col-sm-6 col-md-4" />
           <q-select
             :model-value="os.tipo"
-            :options="TIPOS"
+            :options="opcoesTipo"
             label="Tipo de cliente"
             emit-value
             map-options
@@ -43,10 +43,10 @@
           />
         </div>
         <p v-if="mostrarTaxa" class="aviso-taxa">
-          Cliente <strong>{{ tipoLabel(os.tipo) }}</strong>: acréscimo de <strong>{{ textoTaxa }}</strong> sobre o
+          Cliente <strong>{{ store.tipoLabel(os.tipo) }}</strong>: acréscimo de <strong>{{ textoTaxa }}</strong> sobre o
           valor de venda. Aparece como coluna extra nas peças e serviços e na impressão para o cliente.
         </p>
-        <p v-else class="texto-apoio">{{ tipoLabel(os.tipo) }}: sem acréscimo de tipo de cliente.</p>
+        <p v-else class="texto-apoio">{{ store.tipoLabel(os.tipo) }}: sem acréscimo de tipo de cliente.</p>
       </section>
 
       <!-- Peças -->
@@ -63,7 +63,7 @@
               <span class="rotulo-coluna text-right">Qtd</span>
               <span class="rotulo-coluna text-right">Valor unit.</span>
               <span class="rotulo-coluna text-right">Valor total</span>
-              <span v-if="mostrarTaxa" class="rotulo-coluna text-right texto-taxa">Total {{ tipoLabel(os.tipo) }} {{ textoTaxa }}</span>
+              <span v-if="mostrarTaxa" class="rotulo-coluna text-right texto-taxa">Total {{ store.tipoLabel(os.tipo) }} {{ textoTaxa }}</span>
               <span></span>
               <span></span>
             </div>
@@ -149,7 +149,7 @@
               <span class="rotulo-coluna text-right">Horas</span>
               <span class="rotulo-coluna text-right">Preço hora</span>
               <span class="rotulo-coluna text-right">Total</span>
-              <span v-if="mostrarTaxa" class="rotulo-coluna text-right texto-taxa">Total {{ tipoLabel(os.tipo) }} {{ textoTaxa }}</span>
+              <span v-if="mostrarTaxa" class="rotulo-coluna text-right texto-taxa">Total {{ store.tipoLabel(os.tipo) }} {{ textoTaxa }}</span>
               <span></span>
             </div>
             <div
@@ -253,7 +253,7 @@
               <span>Total (preço padrão)</span><span class="text-mono">{{ brl(T.total) }}</span>
             </div>
             <div v-if="mostrarTaxa" class="row justify-between texto-taxa">
-              <span>Acréscimo {{ tipoLabel(os.tipo) }} ({{ textoTaxa }})</span>
+              <span>Acréscimo {{ store.tipoLabel(os.tipo) }} ({{ textoTaxa }})</span>
               <span class="text-mono">{{ brl(T.comTaxa - T.total) }}</span>
             </div>
             <div v-if="T.desconto > 0" class="row justify-between text-positive">
@@ -365,14 +365,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import {
-  useOficinaStore,
-  TIPOS,
-  STATUS,
-  FORMAS_PAGAMENTO,
-  PRECO_HORA_PADRAO,
-  tipoLabel
-} from '@/stores/oficina'
+import { useOficinaStore, STATUS, FORMAS_PAGAMENTO } from '@/stores/oficina'
 import { num, brl, dec, pct } from '@/utils/formato'
 import ProdutoDialog from '@/components/ProdutoDialog.vue'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
@@ -401,6 +394,8 @@ function carregar(id) {
 }
 
 watch(() => route.params.id, carregar, { immediate: true })
+
+const opcoesTipo = computed(() => store.tiposCliente.map((t) => ({ value: t.id, label: t.nome })))
 
 const T = computed(() => store.totais(os.value))
 const mostrarTaxa = computed(() => T.value.taxa > 0)
@@ -447,11 +442,11 @@ function produtoSalvo({ produto, indice }) {
 
 // ---- serviços
 function adicionarServico() {
-  os.value.servicos.push({ desc: '', horas: '', ph: PRECO_HORA_PADRAO })
+  os.value.servicos.push({ desc: '', horas: '', ph: store.precoHoraPadrao })
 }
 
 function usarSalvo(sv) {
-  os.value.servicos.push({ desc: sv.desc, horas: sv.horas, ph: PRECO_HORA_PADRAO })
+  os.value.servicos.push({ desc: sv.desc, horas: sv.horas, ph: store.precoHoraPadrao })
 }
 
 function salvarComoPreSalvos() {

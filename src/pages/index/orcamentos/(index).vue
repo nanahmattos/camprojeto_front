@@ -99,7 +99,7 @@
         <template #body-cell-cliente="props">
           <q-td :props="props">
             <div class="text-weight-bold ellipsis" style="max-width: 280px">{{ props.row.cliente }}</div>
-            <div class="text-grey-8" style="font-size: 12px">{{ tipoLabel(props.row.tipo) }}</div>
+            <div class="text-grey-8" style="font-size: 12px">{{ store.tipoLabel(props.row.tipo) }}</div>
           </q-td>
         </template>
 
@@ -155,7 +155,7 @@
 <script setup>
 import { ref, computed, reactive } from 'vue'
 import { useQuasar } from 'quasar'
-import { useOficinaStore, TIPOS, STATUS, tipoLabel } from '@/stores/oficina'
+import { useOficinaStore, STATUS } from '@/stores/oficina'
 import { brl, dataBr } from '@/utils/formato'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
 
@@ -170,7 +170,10 @@ const filtroStatus = ref('todos')
 const selecionadas = ref([])
 const impressao = reactive({ aberta: false, alvo: '', tipo: '' })
 
-const opcoesTipo = [{ value: '', label: 'Todos' }, ...TIPOS]
+const opcoesTipo = computed(() => [
+  { value: '', label: 'Todos' },
+  ...store.tiposCliente.map((t) => ({ value: t.id, label: t.nome }))
+])
 
 const colunas = [
   { name: 'id', label: 'Nº O.S', field: 'id', align: 'left', sortable: true },

@@ -72,8 +72,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useQuasar } from 'quasar'
+import { mensagemDeErro } from '@/boot/axios'
 import EssentialLink from '@/components/EssentialLink.vue'
 import { useOficinaStore } from '@/stores/oficina'
 import { useAuthStore } from '@/stores/auth'
@@ -81,6 +83,14 @@ import { useAuthStore } from '@/stores/auth'
 const store = useOficinaStore()
 const auth = useAuthStore()
 const router = useRouter()
+const $q = useQuasar()
+
+// taxas, margens e fornecedores entram no cálculo de preço de todas as telas
+onMounted(() => {
+  store.carregarConfiguracoes().catch((e) => {
+    $q.notify({ message: 'Não foi possível carregar as configurações. ' + mensagemDeErro(e), color: 'negative' })
+  })
+})
 
 const nomeOficina = computed(() => auth.usuario?.oficina.nome || 'Centro Automotivo Mattos')
 

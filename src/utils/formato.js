@@ -46,3 +46,9 @@ export function addMonths(iso, k) {
     String(d.getDate()).padStart(2, '0')
   )
 }
+
+// número vindo da API -> texto no padrão dos campos ("8,5"); null vira ""
+export function paraTexto(v) {
+  if (v === null || v === undefined) return ''
+  return String(Math.round(v * 100) / 100).replace('.', ',')
+}
