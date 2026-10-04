@@ -1,6 +1,6 @@
 <template>
   <q-layout view="lHh Lpr lFf">
-    <q-header elevated>
+    <q-header class="lt-md bg-dark">
       <q-toolbar>
         <q-btn
           flat
@@ -11,22 +11,58 @@
           @click="toggleLeftDrawer"
         />
 
-        <q-toolbar-title> Quasar App </q-toolbar-title>
-
-        <div>Quasar v{{ $q.version }}</div>
+        <q-toolbar-title class="text-weight-bold" style="font-size: 16px">
+          {{ nomeOficina }}
+        </q-toolbar-title>
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="leftDrawerOpen" show-if-above bordered>
-      <q-list>
-        <q-item-label header> Essential Links </q-item-label>
+    <q-drawer
+      v-model="leftDrawerOpen"
+      show-if-above
+      :width="240"
+      class="menu-lateral"
+    >
+      <div class="column no-wrap full-height">
+        <nav aria-label="Menu principal" class="col q-pa-md">
+          <div class="q-px-sm q-pb-lg q-pt-xs column">
+            <span class="text-white text-weight-bold" style="font-size: 16px">
+              {{ nomeOficina }}
+            </span>
+            <span style="font-size: 12px; color: #a9adb2">Gestão da oficina</span>
+          </div>
 
-        <EssentialLink
-          v-for="link in linksList"
-          :key="link.label"
-          v-bind="link"
-        />
-      </q-list>
+          <q-list>
+            <EssentialLink
+              v-for="link in linksList"
+              :key="link.label"
+              v-bind="link"
+            />
+          </q-list>
+        </nav>
+
+        <div v-if="auth.usuario" class="q-pa-md row items-center no-wrap q-gutter-x-sm" style="border-top: 1px solid #34383d">
+          <q-avatar size="36px" color="accent" text-color="dark" class="text-weight-bold" font-size="14px">
+            {{ iniciais }}
+          </q-avatar>
+          <div class="col column" style="min-width: 0">
+            <span class="text-white ellipsis" style="font-size: 14px; font-weight: 600">{{ auth.usuario.nome }}</span>
+            <span class="ellipsis" style="font-size: 12px; color: #a9adb2">{{ auth.usuario.email }}</span>
+          </div>
+          <q-btn
+            flat
+            round
+            dense
+            icon="logout"
+            color="grey-5"
+            aria-label="Sair"
+            :loading="saindo"
+            @click="sair"
+          >
+            <q-tooltip>Sair</q-tooltip>
+          </q-btn>
+        </div>
+      </div>
     </q-drawer>
 
     <q-page-container>
@@ -36,53 +72,51 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import EssentialLink from '@/components/EssentialLink.vue'
+import { useOficinaStore } from '@/stores/oficina'
+import { useAuthStore } from '@/stores/auth'
 
-const linksList = [
+const store = useOficinaStore()
+const auth = useAuthStore()
+const router = useRouter()
+
+const nomeOficina = computed(() => auth.usuario?.oficina.nome || 'Centro Automotivo Mattos')
+
+const iniciais = computed(() => {
+  const partes = (auth.usuario?.nome || '').trim().split(/\s+/)
+  return ((partes[0]?.[0] || '') + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase()
+})
+
+const saindo = ref(false)
+
+async function sair() {
+  saindo.value = true
+  await auth.logout()
+  saindo.value = false
+  router.replace('/login')
+}
+
+const linksList = computed(() => [
   {
-    label: "Docs",
-    caption: "quasar.dev",
-    icon: "school",
-    link: "https://quasar.dev"
+    label: 'Orçamentos',
+    icon: 'description',
+    route: '/orcamentos'
   },
   {
-    label: "GitHub",
-    caption: "github.com/quasarframework",
-    icon: "code",
-    link: "https://github.com/quasarframework"
+    label: 'Estoque',
+    icon: 'inventory_2',
+    route: '/estoque',
+    badge: store.qtdRepor || '',
+    badgeLabel: store.qtdRepor + ' produtos para repor'
   },
   {
-    label: "Discord Chat Channel",
-    caption: "chat.quasar.dev",
-    icon: "chat",
-    link: "https://chat.quasar.dev"
-  },
-  {
-    label: "Forum",
-    caption: "forum.quasar.dev",
-    icon: "record_voice_over",
-    link: "https://forum.quasar.dev"
-  },
-  {
-    label: "Twitter",
-    caption: "@quasarframework",
-    icon: "rss_feed",
-    link: "https://twitter.quasar.dev"
-  },
-  {
-    label: "Facebook",
-    caption: "@QuasarFramework",
-    icon: "public",
-    link: "https://facebook.quasar.dev"
-  },
-  {
-    label: "Quasar Awesome",
-    caption: "Community Quasar projects",
-    icon: "favorite",
-    link: "https://awesome.quasar.dev"
+    label: 'Configurações',
+    icon: 'tune',
+    route: '/configuracao'
   }
-]
+])
 
 const leftDrawerOpen = ref(false)
 
