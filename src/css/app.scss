@@ -197,3 +197,8 @@ body {
   color: #fff;
   font-weight: 600;
 }
+
+// linhas que abrem um cadastro ao clicar
+.tabela-clicavel tbody tr {
+  cursor: pointer;
+}

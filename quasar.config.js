@@ -79,7 +79,8 @@ export default defineConfig((/* ctx */) => {
       // em desenvolvimento, /api/... vai para o Laravel (php artisan serve)
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8000',
+          // API_PROXY permite apontar para outra API (ex.: a de testes na porta 8001)
+          target: process.env.API_PROXY || 'http://127.0.0.1:8000',
           changeOrigin: true
         }
       }

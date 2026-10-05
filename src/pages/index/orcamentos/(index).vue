@@ -19,6 +19,7 @@
             outlined
             dense
             clearable
+            debounce="350"
             class="col-12 col-md-5"
           >
             <template #prepend><q-icon name="search" /></template>
@@ -67,85 +68,105 @@
         </span>
         <q-btn no-caps unelevated color="white" text-color="dark" label="Imprimir selecionadas" @click="abrirImpressao(selecionadas.length + ' O.S selecionadas', '')" />
         <q-btn no-caps unelevated color="white" text-color="dark" label="Enviar por e-mail" @click="avisar(selecionadas.length + ' O.S prontas para enviar por e-mail.')" />
+        <q-btn
+          v-if="ehAdmin"
+          no-caps
+          unelevated
+          color="negative"
+          icon="delete_outline"
+          label="Excluir selecionadas"
+          :loading="excluindo"
+          @click="excluir(selecionadas)"
+        />
         <q-btn no-caps flat color="white" label="Limpar seleção" @click="selecionadas = []" />
       </div>
 
       <q-table
         v-model:selected="selecionadas"
-        :rows="ordensFiltradas"
+        v-model:pagination="paginacao"
+        :rows="ordens"
         :columns="colunas"
         row-key="id"
         selection="multiple"
         flat
         bordered
-        class="tabela-oficina"
-        :pagination="{ rowsPerPage: 0 }"
-        hide-pagination
-        no-data-label="Nenhuma O.S encontrada com esses filtros."
+        class="tabela-oficina tabela-clicavel"
+        :loading="carregando"
+        :rows-per-page-options="[25, 50, 100]"
+        rows-per-page-label="Por página"
+        :pagination-label="(ini, fim, total) => ini + '–' + fim + ' de ' + total"
         :selected-rows-label="() => ''"
+        :no-data-label="erro || 'Nenhuma O.S encontrada com esses filtros.'"
+        binary-state-sort
+        @request="aoMudarTabela"
+        @row-click="(_evt, row) => router.push('/orcamentos/' + numeroOS(row.numero))"
       >
-        <template #body-cell-id="props">
+        <template #body-cell-numero="props">
           <q-td :props="props">
             <router-link
-              :to="'/orcamentos/' + props.row.id"
+              :to="'/orcamentos/' + numeroOS(props.row.numero)"
               class="text-primary text-weight-bold text-mono"
               style="text-underline-offset: 3px"
+              @click.stop
             >
-              {{ props.row.id }}
+              {{ numeroOS(props.row.numero) }}
             </router-link>
           </q-td>
         </template>
 
         <template #body-cell-cliente="props">
           <q-td :props="props">
-            <div class="text-weight-bold ellipsis" style="max-width: 280px">{{ props.row.cliente }}</div>
-            <div class="text-grey-8" style="font-size: 12px">{{ store.tipoLabel(props.row.tipo) }}</div>
+            <div class="text-weight-bold ellipsis" style="max-width: 280px">{{ props.row.cliente_nome }}</div>
+            <div class="text-grey-8" style="font-size: 12px">{{ store.tipoLabel(props.row.tipo_cliente_id) }}</div>
           </q-td>
         </template>
 
         <template #body-cell-placa="props">
           <q-td :props="props">
-            <span class="placa">{{ props.row.placa }}</span>
+            <span v-if="props.row.placa" class="placa">{{ props.row.placa }}</span>
           </q-td>
         </template>
 
-        <template #body-cell-total="props">
+        <template #body-cell-total_cliente="props">
           <q-td :props="props" class="text-mono text-weight-bold">{{ props.value }}</q-td>
         </template>
 
         <template #body-cell-status="props">
           <q-td :props="props">
-            <span class="chip-status" :class="classeStatus(props.row.status)">{{ props.row.status }}</span>
+            <span class="chip-status" :class="'status-' + props.row.status.replace('_', '-')">{{ STATUS_API[props.row.status] }}</span>
           </q-td>
         </template>
 
         <template #body-cell-acoes="props">
-          <q-td :props="props">
+          <q-td :props="props" @click.stop>
             <q-btn flat round dense icon="more_horiz" color="grey-8" aria-label="Ações da O.S">
               <q-menu anchor="bottom right" self="top right">
                 <q-list style="min-width: 230px">
-                  <q-item v-close-popup clickable @click="abrirImpressao('O.S ' + props.row.id, props.row.tipo)">
+                  <q-item v-close-popup clickable @click="abrirImpressao('O.S ' + numeroOS(props.row.numero), props.row.tipo_cliente_id)">
                     <q-item-section avatar><q-icon name="print" /></q-item-section>
                     <q-item-section>Imprimir…</q-item-section>
                   </q-item>
-                  <q-item v-close-popup clickable @click="avisar('O.S ' + props.row.id + ' pronta para enviar por e-mail.')">
+                  <q-item v-close-popup clickable @click="avisar('O.S ' + numeroOS(props.row.numero) + ' pronta para enviar por e-mail.')">
                     <q-item-section avatar><q-icon name="mail_outline" /></q-item-section>
                     <q-item-section>Enviar por e-mail</q-item-section>
                   </q-item>
-                  <q-item v-close-popup clickable @click="avisar('O.S ' + props.row.id + ' pronta para enviar por WhatsApp.')">
+                  <q-item v-close-popup clickable @click="avisar('O.S ' + numeroOS(props.row.numero) + ' pronta para enviar por WhatsApp.')">
                     <q-item-section avatar><q-icon name="chat_bubble_outline" /></q-item-section>
                     <q-item-section>Enviar por WhatsApp</q-item-section>
                   </q-item>
+                  <template v-if="ehAdmin">
+                    <q-separator />
+                    <q-item v-close-popup clickable class="text-negative" @click="excluir([props.row])">
+                      <q-item-section avatar><q-icon name="delete_outline" color="negative" /></q-item-section>
+                      <q-item-section>Excluir</q-item-section>
+                    </q-item>
+                  </template>
                 </q-list>
               </q-menu>
             </q-btn>
           </q-td>
         </template>
       </q-table>
-
-      <p class="texto-apoio">
-        Mostrando {{ ordensFiltradas.length }} de {{ store.ordens.length }} ordens de serviço
-      </p>
     </div>
 
     <ImprimirDialog v-model="impressao.aberta" :alvo="impressao.alvo" :tipo-cliente="impressao.tipo" />
@@ -153,76 +174,124 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { useOficinaStore, STATUS } from '@/stores/oficina'
+import { useOficinaStore } from '@/stores/oficina'
+import { mensagemDeErro } from '@/boot/axios'
+import { listarOrdens, excluirOrdem, confirmarExclusao, numeroOS, STATUS_API } from '@/api/ordens'
+import { useAuthStore } from '@/stores/auth'
 import { brl, dataBr } from '@/utils/formato'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
 
 const $q = useQuasar()
+const router = useRouter()
 const store = useOficinaStore()
+const auth = useAuthStore()
+const ehAdmin = computed(() => auth.usuario?.papel === 'admin')
+const excluindo = ref(false)
 
 const busca = ref('')
-const filtroTipo = ref('')
+const filtroTipo = ref(null)
 const dataDe = ref('')
 const dataAte = ref('')
 const filtroStatus = ref('todos')
 const selecionadas = ref([])
 const impressao = reactive({ aberta: false, alvo: '', tipo: '' })
 
+const ordens = ref([])
+const contagem = ref({})
+const carregando = ref(false)
+const erro = ref('')
+const paginacao = ref({ page: 1, rowsPerPage: 25, rowsNumber: 0, sortBy: 'numero', descending: true })
+
 const opcoesTipo = computed(() => [
-  { value: '', label: 'Todos' },
+  { value: null, label: 'Todos' },
   ...store.tiposCliente.map((t) => ({ value: t.id, label: t.nome }))
 ])
 
 const colunas = [
-  { name: 'id', label: 'Nº O.S', field: 'id', align: 'left', sortable: true },
+  { name: 'numero', label: 'Nº O.S', field: 'numero', align: 'left', sortable: true },
   { name: 'data', label: 'Data', field: 'data', align: 'left', sortable: true, format: dataBr },
-  { name: 'cliente', label: 'Cliente', field: 'cliente', align: 'left', sortable: true },
-  { name: 'veiculo', label: 'Veículo', field: 'veiculo', align: 'left' },
+  { name: 'cliente', label: 'Cliente', field: 'cliente_nome', align: 'left', sortable: true },
+  { name: 'veiculo', label: 'Veículo', field: 'veiculo_modelo', align: 'left' },
   { name: 'placa', label: 'Placa', field: 'placa', align: 'left' },
-  {
-    name: 'total',
-    label: 'Total',
-    field: (os) => store.totais(os).totalCliente,
-    format: brl,
-    align: 'right',
-    sortable: true
-  },
+  { name: 'total_cliente', label: 'Total', field: 'total_cliente', format: brl, align: 'right', sortable: true },
   { name: 'status', label: 'Status', field: 'status', align: 'left', sortable: true },
   { name: 'acoes', label: '', field: 'id', align: 'right' }
 ]
 
 const filtrosStatus = computed(() => [
-  { value: 'todos', label: 'Todos', qtd: store.ordens.length },
-  ...STATUS.map((s) => ({ value: s, label: s, qtd: store.ordens.filter((o) => o.status === s).length }))
+  { value: 'todos', label: 'Todos', qtd: contagem.value.todos ?? 0 },
+  ...Object.entries(STATUS_API).map(([value, label]) => ({ value, label, qtd: contagem.value[value] ?? 0 }))
 ])
 
-const ordensFiltradas = computed(() => {
-  const q = (busca.value || '').trim().toLowerCase()
-  return store.ordens.filter(
-    (o) =>
-      (filtroStatus.value === 'todos' || o.status === filtroStatus.value) &&
-      (!filtroTipo.value || o.tipo === filtroTipo.value) &&
-      (!dataDe.value || o.data >= dataDe.value) &&
-      (!dataAte.value || o.data <= dataAte.value) &&
-      (!q || (o.cliente + ' ' + o.placa + ' ' + o.id + ' ' + o.veiculo).toLowerCase().includes(q))
-  )
+async function carregar() {
+  carregando.value = true
+  erro.value = ''
+  const p = paginacao.value
+  try {
+    const r = await listarOrdens({
+      busca: busca.value || undefined,
+      status: filtroStatus.value !== 'todos' ? filtroStatus.value : undefined,
+      tipo_cliente_id: filtroTipo.value || undefined,
+      de: dataDe.value || undefined,
+      ate: dataAte.value || undefined,
+      ordenar: p.sortBy || 'numero',
+      direcao: p.descending ? 'desc' : 'asc',
+      por_pagina: p.rowsPerPage,
+      page: p.page
+    })
+    ordens.value = r.data
+    contagem.value = r.meta.contagem
+    paginacao.value = { ...p, rowsNumber: r.meta.total }
+    selecionadas.value = []
+  } catch (e) {
+    ordens.value = []
+    erro.value = mensagemDeErro(e)
+  } finally {
+    carregando.value = false
+  }
+}
+
+function aoMudarTabela({ pagination }) {
+  paginacao.value = { ...pagination }
+  carregar()
+}
+
+watch([busca, filtroTipo, dataDe, dataAte, filtroStatus], () => {
+  paginacao.value = { ...paginacao.value, page: 1 }
+  carregar()
 })
 
-function classeStatus(status) {
-  return {
-    'Em aberto': 'status-em-aberto',
-    Finalizado: 'status-finalizado',
-    Pendente: 'status-pendente',
-    'Não aprovado': 'status-nao-aprovado'
-  }[status]
-}
+onMounted(carregar)
 
 function abrirImpressao(alvo, tipo) {
   impressao.alvo = alvo
   impressao.tipo = tipo
   impressao.aberta = true
+}
+
+async function excluir(lista) {
+  const texto = lista.length === 1 ? 'a O.S ' + numeroOS(lista[0].numero) : 'as ' + lista.length + ' O.S selecionadas'
+  if (!(await confirmarExclusao($q, texto))) return
+  excluindo.value = true
+  let ok = 0
+  const erros = []
+  // uma por vez: se uma falhar, as outras continuam
+  for (const o of lista) {
+    try {
+      await excluirOrdem(o.numero)
+      ok++
+    } catch (e) {
+      erros.push(numeroOS(o.numero) + ': ' + mensagemDeErro(e))
+    }
+  }
+  excluindo.value = false
+  if (ok) $q.notify({ message: ok === 1 ? 'O.S excluída.' : ok + ' O.S excluídas.', color: 'dark' })
+  if (erros.length) $q.notify({ message: 'Não excluída: ' + erros.join(' · '), color: 'negative', timeout: 8000 })
+  store.carregarResumoEstoque()
+  carregar()
 }
 
 function avisar(message) {

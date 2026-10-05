@@ -19,17 +19,28 @@
         <div class="row q-col-gutter-md items-start">
           <div class="col-12 col-md-5">
             <section class="cartao q-pa-md column q-gutter-y-sm" aria-label="Taxas por tipo de cliente">
-              <h2 class="titulo-secao">Taxas por tipo de cliente</h2>
+              <div class="row items-center justify-between no-wrap">
+                <h2 class="titulo-secao">Taxas por tipo de cliente</h2>
+                <q-btn v-if="podeEditar" flat dense no-caps color="primary" icon="add" label="Adicionar" @click="adicionarTipo" />
+              </div>
               <p class="texto-apoio">
                 Somada ao preço de venda (já com markup). Com taxa acima de 0%, o orçamento ganha a coluna extra.
               </p>
               <div
-                v-for="t in form.tiposCliente"
-                :key="t.id"
+                v-for="(t, i) in form.tiposCliente"
+                :key="t.id || 'novo-tipo' + i"
                 class="grade q-py-xs"
-                style="grid-template-columns: minmax(0, 1fr) 120px; border-bottom: 1px solid #f0eee9"
+                style="grid-template-columns: minmax(0, 1fr) 110px 40px; border-bottom: 1px solid #f0eee9"
               >
-                <span class="text-weight-medium" style="font-size: 14px">{{ t.nome }}</span>
+                <q-input
+                  v-model="t.nome"
+                  aria-label="Nome do tipo de cliente"
+                  placeholder="Nome do tipo de cliente"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  :autofocus="!t.id && i === form.tiposCliente.length - 1"
+                />
                 <q-input
                   v-model="t.taxa"
                   :aria-label="'Taxa ' + t.nome + ' em porcentagem'"
@@ -41,6 +52,82 @@
                   :readonly="!podeEditar"
                   input-class="text-right text-mono"
                 />
+                <q-btn
+                  v-if="podeEditar"
+                  flat
+                  round
+                  dense
+                  icon="delete_outline"
+                  color="grey-8"
+                  :aria-label="'Excluir tipo ' + t.nome"
+                  :disable="form.tiposCliente.length === 1"
+                  @click="form.tiposCliente.splice(i, 1)"
+                />
+                <span v-else></span>
+              </div>
+              <p class="texto-apoio" style="font-size: 12px">
+                Excluir tira o tipo das listas de escolha. Clientes e O.S que já usam o tipo continuam mostrando o nome.
+              </p>
+            </section>
+
+            <section class="cartao q-pa-md column q-gutter-y-sm q-mt-md" aria-label="Tabelas de preço da hora">
+              <div class="row items-center justify-between no-wrap">
+                <h2 class="titulo-secao">Tabelas de preço da hora</h2>
+                <q-btn v-if="podeEditar" flat dense no-caps color="primary" icon="add" label="Adicionar" @click="adicionarTabela" />
+              </div>
+              <p class="texto-apoio">
+                Em cada serviço da O.S você escolhe a tabela, e o preço da hora vem dela. A padrão entra nos serviços novos.
+              </p>
+              <div class="grade grade-cabecalho" style="grid-template-columns: 56px minmax(0, 1fr) 130px 40px">
+                <span class="rotulo-coluna">Padrão</span>
+                <span class="rotulo-coluna">Nome</span>
+                <span class="rotulo-coluna">Preço da hora</span>
+                <span></span>
+              </div>
+              <div
+                v-for="(t, i) in form.tabelasPreco"
+                :key="t.id || 'nova-tabela' + i"
+                class="grade"
+                style="grid-template-columns: 56px minmax(0, 1fr) 130px 40px"
+              >
+                <q-radio
+                  :model-value="t.padrao"
+                  :val="true"
+                  :aria-label="'Usar ' + t.nome + ' como padrão'"
+                  :disable="!podeEditar"
+                  @update:model-value="marcarPadrao(t)"
+                />
+                <q-input
+                  v-model="t.nome"
+                  aria-label="Nome da tabela de preço"
+                  placeholder="Ex.: Mecânica diesel"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  :autofocus="!t.id && i === form.tabelasPreco.length - 1"
+                />
+                <q-input
+                  v-model="t.preco"
+                  aria-label="Preço da hora"
+                  prefix="R$"
+                  inputmode="decimal"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  input-class="text-right text-mono"
+                />
+                <q-btn
+                  v-if="podeEditar"
+                  flat
+                  round
+                  dense
+                  icon="delete_outline"
+                  color="grey-8"
+                  :aria-label="'Excluir tabela ' + t.nome"
+                  :disable="form.tabelasPreco.length === 1"
+                  @click="removerTabela(i)"
+                />
+                <span v-else></span>
               </div>
             </section>
           </div>
@@ -87,26 +174,6 @@
                 />
               </div>
 
-              <q-separator class="q-my-sm" />
-
-              <div class="row items-center q-col-gutter-sm">
-                <div class="col-12 col-sm">
-                  <div class="text-weight-medium" style="font-size: 14px">Preço da hora padrão</div>
-                  <p class="texto-apoio">Valor inicial do "preço hora" em cada serviço novo da O.S.</p>
-                </div>
-                <q-input
-                  v-model="form.precoHoraPadrao"
-                  aria-label="Preço da hora padrão"
-                  prefix="R$"
-                  inputmode="decimal"
-                  outlined
-                  dense
-                  :readonly="!podeEditar"
-                  input-class="text-right text-mono"
-                  class="col-12 col-sm-auto"
-                  style="min-width: 160px"
-                />
-              </div>
             </section>
           </div>
         </div>
@@ -124,7 +191,10 @@
               @click="adicionarFornecedor"
             />
           </div>
-          <p class="texto-apoio">Somados ao preço de custo antes da margem. ST em 0% = fornecedor sem ST retido.</p>
+          <p class="texto-apoio">
+            Somados ao preço de custo antes da margem. ST em 0% = fornecedor sem ST retido. Excluir tira o fornecedor da
+            lista; produtos que já usam ele continuam com o nome e o preço.
+          </p>
 
           <p v-if="!form.fornecedores.length" class="texto-apoio q-py-md text-center">
             Nenhum fornecedor cadastrado ainda.
@@ -168,13 +238,13 @@
                   </q-chip>
                 </span>
                 <q-btn
-                  v-if="!f.id"
+                  v-if="podeEditar"
                   flat
                   round
                   dense
-                  icon="close"
+                  icon="delete_outline"
                   color="grey-8"
-                  aria-label="Remover fornecedor ainda não salvo"
+                  :aria-label="'Excluir fornecedor ' + (f.nome || 'novo')"
                   @click="form.fornecedores.splice(i, 1)"
                 />
                 <span v-else></span>
@@ -221,10 +291,11 @@ function copiaDoStore() {
   return JSON.parse(
     JSON.stringify({
       autoPadrao: store.autoPadrao,
-      precoHoraPadrao: store.precoHoraPadrao,
-      tiposCliente: store.tiposCliente,
+      // só os ativos: o que for excluído aqui some da lista enviada e a API desativa
+      tiposCliente: store.tiposAtivos,
+      tabelasPreco: store.tabelasAtivas,
       faixas: store.faixas,
-      fornecedores: store.fornecedores
+      fornecedores: store.fornecedoresAtivos
     })
   )
 }
@@ -256,8 +327,26 @@ onMounted(() => {
     .catch((e) => $q.notify({ message: mensagemDeErro(e), color: 'negative', position: 'top' }))
 })
 
+function adicionarTipo() {
+  form.value.tiposCliente.push({ id: null, nome: '', taxa: '0', ativo: true })
+}
+
+function adicionarTabela() {
+  form.value.tabelasPreco.push({ id: null, nome: '', preco: '', padrao: false, ativo: true })
+}
+
+function marcarPadrao(tabela) {
+  form.value.tabelasPreco.forEach((t) => (t.padrao = t === tabela))
+}
+
+function removerTabela(i) {
+  const [removida] = form.value.tabelasPreco.splice(i, 1)
+  // sempre tem que sobrar uma padrão
+  if (removida.padrao && form.value.tabelasPreco.length) form.value.tabelasPreco[0].padrao = true
+}
+
 function adicionarFornecedor() {
-  form.value.fornecedores.push({ id: null, nome: '', st: '0', frete: '0', desp: '0' })
+  form.value.fornecedores.push({ id: null, nome: '', st: '0', frete: '0', desp: '0', ativo: true })
 }
 
 async function salvar() {

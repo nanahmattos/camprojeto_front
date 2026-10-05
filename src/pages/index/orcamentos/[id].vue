@@ -1,24 +1,63 @@
 <template>
   <q-page padding>
-    <div v-if="os" class="pagina">
+    <div v-if="!os" class="row justify-center q-pa-xl">
+      <q-spinner size="32px" color="primary" />
+    </div>
+
+    <div v-else class="pagina">
       <!-- Barra de topo -->
       <div class="row items-center q-gutter-sm">
         <q-btn outline no-caps color="grey-8" icon="chevron_left" label="Orçamentos" to="/orcamentos" />
-        <h1 class="titulo-pagina col" style="font-size: 26px">
-          Orçamento <span class="text-mono">{{ os.id || 'novo' }}</span>
+        <h1 class="titulo-pagina col" style="font-size: 26px; margin-left: 12px">
+          Orçamento <span class="text-mono">{{ numeroOS(os.numero) || 'novo' }}</span>
+          <span v-if="alterado" class="text-grey-7 text-weight-regular q-ml-sm" style="font-size: 14px">· não salvo</span>
         </h1>
         <q-select v-model="os.status" :options="STATUS" label="Status" outlined dense style="width: 170px" />
         <q-btn outline no-caps color="grey-8" icon="print" label="Imprimir" @click="impressaoAberta = true" />
-        <q-btn unelevated no-caps color="primary" label="Salvar O.S" @click="salvar" />
+        <q-btn
+          v-if="os.numero && ehAdmin"
+          outline
+          no-caps
+          color="negative"
+          icon="delete_outline"
+          label="Excluir"
+          :loading="excluindo"
+          @click="excluir"
+        />
+        <q-btn unelevated no-caps color="primary" label="Salvar O.S" :loading="salvando" @click="salvar" />
       </div>
 
       <!-- Cabeçalho -->
       <section class="cartao q-pa-md column q-gutter-y-md" aria-label="Cabeçalho">
         <h2 class="titulo-secao">Cabeçalho</h2>
         <div class="row q-col-gutter-sm">
-          <q-input :model-value="os.id || 'novo'" label="Nº da O.S" readonly outlined dense input-class="text-mono" class="col-6 col-sm-3 col-md-1" />
+          <q-input :model-value="numeroOS(os.numero) || 'novo'" label="Nº da O.S" readonly outlined dense input-class="text-mono" class="col-6 col-sm-3 col-md-1" />
           <q-input v-model="os.data" type="date" label="Data" stack-label outlined dense class="col-6 col-sm-3 col-md-2" />
-          <q-input v-model="os.cliente" label="Cliente" placeholder="Nome do cliente" outlined dense class="col-12 col-sm-6 col-md-4" />
+          <q-input
+            :model-value="os.cliente"
+            label="Cliente"
+            placeholder="Nome do cliente"
+            autocomplete="off"
+            outlined
+            dense
+            class="col-12 col-sm-6 col-md-4"
+            @update:model-value="digitarCliente"
+            @blur="fecharSugestoes"
+          >
+            <q-menu v-model="menuClientes" no-parent-event no-focus no-refocus fit :offset="[0, 4]">
+              <q-list dense style="min-width: 280px">
+                <q-item v-for="c in sugestoesCliente" :key="c.id" clickable @mousedown.prevent @click="escolherCliente(c)">
+                  <q-item-section>
+                    <q-item-label>{{ c.nome }}</q-item-label>
+                    <q-item-label caption>
+                      {{ store.tipoLabel(c.tipo_cliente_id) }}
+                      <span v-if="c.veiculos.length"> · {{ c.veiculos.map((v) => v.placa).join(', ') }}</span>
+                    </q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-input>
           <q-select
             :model-value="os.tipo"
             :options="opcoesTipo"
@@ -37,11 +76,28 @@
             placeholder="AAA0A00"
             outlined
             dense
-            maxlength="7"
+            maxlength="8"
             input-class="text-mono text-uppercase"
             class="col-12 col-sm-3 col-md-1"
+            :loading="buscandoPlaca"
+            @blur="buscarPlaca"
           />
         </div>
+        <div v-if="veiculosDoCliente.length > 1 && !os.placa" class="row items-center q-gutter-sm">
+          <span class="texto-apoio">Veículos de {{ os.cliente }}:</span>
+          <q-chip
+            v-for="v in veiculosDoCliente"
+            :key="v.id"
+            clickable
+            dense
+            color="grey-3"
+            text-color="grey-9"
+            @click="usarVeiculo(v)"
+          >
+            <span class="text-mono q-mr-xs">{{ v.placa }}</span> {{ v.modelo }}
+          </q-chip>
+        </div>
+        <p v-if="avisoPlaca" class="texto-apoio">{{ avisoPlaca }}</p>
         <p v-if="mostrarTaxa" class="aviso-taxa">
           Cliente <strong>{{ store.tipoLabel(os.tipo) }}</strong>: acréscimo de <strong>{{ textoTaxa }}</strong> sobre o
           valor de venda. Aparece como coluna extra nas peças e serviços e na impressão para o cliente.
@@ -110,7 +166,7 @@
             icon="edit"
             label="Serviços pré-salvos"
             :aria-expanded="salvosAbertos"
-            @click="salvosAbertos = !salvosAbertos"
+            @click="alternarSalvos"
           />
           <q-btn outline no-caps color="grey-8" icon="add" label="Adicionar serviço" @click="adicionarServico" />
         </div>
@@ -125,16 +181,29 @@
               <strong style="font-size: 14px">Pré-salvos para {{ os.veiculo || '[veículo]' }} · {{ os.placa || '[placa]' }}</strong>
               <span class="text-grey-8" style="font-size: 12px">Edite aqui; clique em Usar para incluir no orçamento.</span>
             </div>
+            <div v-if="carregandoSalvos" class="row justify-center q-pa-sm"><q-spinner color="primary" /></div>
+            <p v-else-if="!salvos.length" class="texto-apoio">Nenhum serviço pré-salvo ainda.</p>
             <div
-              v-for="(sv, i) in store.servicosSalvos"
-              :key="'sv' + i"
+              v-for="sv in salvos"
+              :key="sv.id"
               class="grade"
               style="grid-template-columns: minmax(0, 1fr) 90px auto 40px"
             >
-              <q-input v-model="sv.desc" aria-label="Descrição do serviço pré-salvo" outlined dense bg-color="white" />
-              <q-input v-model="sv.horas" aria-label="Horas" outlined dense bg-color="white" input-class="text-right text-mono" />
+              <q-input
+                v-model="sv.desc"
+                aria-label="Descrição do serviço pré-salvo"
+                outlined
+                dense
+                bg-color="white"
+                @change="atualizarSalvo(sv)"
+              >
+                <template v-if="sv.doVeiculo" #prepend>
+                  <q-icon name="directions_car" size="18px" color="grey-7"><q-tooltip>Pré-salvo deste veículo</q-tooltip></q-icon>
+                </template>
+              </q-input>
+              <q-input v-model="sv.horas" aria-label="Horas" outlined dense bg-color="white" input-class="text-right text-mono" @change="atualizarSalvo(sv)" />
               <q-btn outline no-caps color="grey-8" label="Usar" @click="usarSalvo(sv)" />
-              <q-btn flat round dense icon="close" color="grey-8" aria-label="Excluir pré-salvo" @click="store.servicosSalvos.splice(i, 1)" />
+              <q-btn flat round dense icon="close" color="grey-8" aria-label="Excluir pré-salvo" @click="excluirSalvo(sv)" />
             </div>
             <div>
               <q-btn outline no-caps color="grey-8" label="Salvar serviços desta O.S como pré-salvos" @click="salvarComoPreSalvos" />
@@ -143,9 +212,10 @@
         </q-slide-transition>
 
         <div class="rolagem-x">
-          <div :style="{ minWidth: mostrarTaxa ? '820px' : '680px' }">
+          <div :style="{ minWidth: mostrarTaxa ? '1000px' : '860px' }">
             <div class="grade grade-cabecalho" :style="{ gridTemplateColumns: colunasServicos }">
               <span class="rotulo-coluna">Descrição do serviço</span>
+              <span class="rotulo-coluna">Tabela</span>
               <span class="rotulo-coluna text-right">Horas</span>
               <span class="rotulo-coluna text-right">Preço hora</span>
               <span class="rotulo-coluna text-right">Total</span>
@@ -159,6 +229,17 @@
               :style="{ gridTemplateColumns: colunasServicos }"
             >
               <q-input v-model="s.desc" placeholder="Descrição do serviço" aria-label="Descrição do serviço" outlined dense />
+              <q-select
+                :model-value="s.tabela"
+                :options="opcoesTabela(s.tabela)"
+                aria-label="Tabela de preço da hora"
+                emit-value
+                map-options
+                outlined
+                dense
+                options-dense
+                @update:model-value="(id) => escolherTabela(s, id)"
+              />
               <q-input v-model="s.horas" placeholder="0" aria-label="Horas" inputmode="decimal" outlined dense input-class="text-right text-mono" />
               <q-input v-model="s.ph" aria-label="Preço hora" inputmode="decimal" outlined dense input-class="text-right text-mono" />
               <q-input :model-value="dec(num(s.horas) * num(s.ph))" aria-label="Total do serviço" readonly outlined dense bg-color="grey-2" input-class="text-right text-mono" />
@@ -185,7 +266,7 @@
       <!-- Observações + Totais -->
       <div class="row q-col-gutter-md items-stretch">
         <div class="col-12 col-md-8">
-          <section class="cartao q-pa-md column q-gutter-y-md full-height" aria-label="Observações">
+          <section class="cartao q-pa-md column no-wrap q-gutter-y-md full-height" aria-label="Observações">
             <q-input
               v-model="os.obsAnalise"
               type="textarea"
@@ -245,7 +326,7 @@
           </section>
         </div>
         <div class="col-12 col-md-4">
-          <section class="cartao q-pa-md column q-gutter-y-sm full-height" aria-label="Totais" style="font-size: 14px">
+          <section class="cartao q-pa-md column no-wrap q-gutter-y-sm full-height" aria-label="Totais" style="font-size: 14px">
             <h2 class="titulo-secao q-mb-xs">Totais</h2>
             <div class="row justify-between"><span class="text-grey-8">Peças</span><span class="text-mono">{{ brl(T.pecas) }}</span></div>
             <div class="row justify-between"><span class="text-grey-8">Serviços</span><span class="text-mono">{{ brl(T.servicos) }}</span></div>
@@ -346,8 +427,8 @@
 
     <ProdutoDialog
       v-model="produtoDialog.aberto"
-      :produto="produtoDialog.produto"
-      :indice="produtoDialog.indice"
+      :produto-id="produtoDialog.id"
+      :inicial="produtoDialog.inicial"
       origem="orc"
       @salvo="produtoSalvo"
     />
@@ -355,17 +436,32 @@
     <ImprimirDialog
       v-if="os"
       v-model="impressaoAberta"
-      :alvo="'O.S ' + (os.id || 'nova')"
+      :alvo="'O.S ' + (numeroOS(os.numero) || 'nova')"
       :tipo-cliente="os.tipo"
     />
   </q-page>
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useOficinaStore, STATUS, FORMAS_PAGAMENTO } from '@/stores/oficina'
+import { mensagemDeErro } from '@/boot/axios'
+import { useAuthStore } from '@/stores/auth'
+import {
+  excluirOrdem,
+  confirmarExclusao,
+  obterOrdem,
+  salvarOrdem,
+  numeroOS,
+  buscarClientes,
+  veiculoPorPlaca,
+  listarServicosSalvos,
+  criarServicosSalvos,
+  atualizarServicoSalvo,
+  apagarServicoSalvo
+} from '@/api/ordens'
 import { num, brl, dec, pct } from '@/utils/formato'
 import ProdutoDialog from '@/components/ProdutoDialog.vue'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
@@ -374,28 +470,95 @@ const $q = useQuasar()
 const route = useRoute()
 const router = useRouter()
 const store = useOficinaStore()
+const auth = useAuthStore()
+const ehAdmin = computed(() => auth.usuario?.papel === 'admin')
+const excluindo = ref(false)
 
-// cópia local da O.S; só vai para a lista ao clicar em Salvar
+// cópia local da O.S; só vai para o banco ao clicar em Salvar
 const os = ref(null)
+const original = ref('')
+const salvando = ref(false)
 const salvosAbertos = ref(false)
 const impressaoAberta = ref(false)
-const produtoDialog = reactive({ aberto: false, produto: null, indice: null, peca: null })
+const produtoDialog = reactive({ aberto: false, id: null, inicial: {}, peca: null })
 
-function carregar(id) {
-  if (!id) return
-  const encontrada = id === 'nova' ? store.novaOrdem() : store.buscarOrdem(id)
-  if (!encontrada) {
-    $q.notify({ message: 'O.S ' + id + ' não encontrada.', color: 'negative' })
-    router.replace('/orcamentos')
+// ---- cliente e veículo
+const sugestoesCliente = ref([])
+const menuClientes = ref(false)
+const veiculosDoCliente = ref([])
+const buscandoPlaca = ref(false)
+const avisoPlaca = ref('')
+
+// ---- serviços pré-salvos
+const salvos = ref([])
+const carregandoSalvos = ref(false)
+
+const alterado = computed(() => !!os.value && JSON.stringify(os.value) !== original.value)
+
+function usar(form) {
+  os.value = form
+  original.value = JSON.stringify(form)
+  salvos.value = []
+  salvosAbertos.value = false
+  veiculosDoCliente.value = []
+  avisoPlaca.value = ''
+}
+
+async function carregar(param) {
+  if (!param) return
+  if (param === 'nova') {
+    if (!store.configCarregada) await store.carregarConfiguracoes().catch(() => {})
+    usar(store.novaOrdem())
     return
   }
-  os.value = encontrada
-  salvosAbertos.value = false
+  const numero = parseInt(param, 10)
+  // acabou de salvar uma O.S nova e a URL trocou de "nova" para o número: já está carregada
+  if (os.value && os.value.numero === numero) return
+  os.value = null
+  try {
+    usar(await obterOrdem(numero))
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative' })
+    router.replace('/orcamentos')
+  }
 }
 
 watch(() => route.params.id, carregar, { immediate: true })
 
-const opcoesTipo = computed(() => store.tiposCliente.map((t) => ({ value: t.id, label: t.nome })))
+// parcelas acompanham o total enquanto ninguém mexeu nelas à mão
+// (se a soma batia com o total anterior, refaz; se foi ajustada, deixa como está)
+watch(
+  () => [os.value, os.value ? store.totais(os.value).totalCliente : 0],
+  ([osAtual, total], [osAntes, totalAntes]) => {
+    if (!osAtual || osAtual !== osAntes || Math.abs(total - totalAntes) < 0.005) return
+    const soma = osAtual.pagamento.lista.reduce((a, p) => a + num(p.valor), 0)
+    if (Math.abs(soma - totalAntes) < 0.01) recalcularParcelas()
+  }
+)
+
+// tipos ativos; o da O.S entra mesmo se tiver sido desativado depois
+const opcoesTipo = computed(() =>
+  store.tiposCliente
+    .filter((t) => t.ativo || t.id === os.value?.tipo)
+    .map((t) => ({ value: t.id, label: t.nome + (t.ativo ? '' : ' (desativado)') }))
+)
+
+// tabelas de preço ativas (+ a já usada no serviço, se tiver sido desativada)
+function opcoesTabela(atual) {
+  return [
+    ...store.tabelasPreco
+      .filter((t) => t.ativo || t.id === atual)
+      .map((t) => ({ value: t.id, label: t.nome + ' · R$ ' + t.preco + (t.ativo ? '' : ' (desativada)') })),
+    { value: null, label: 'Preço à mão' }
+  ]
+}
+
+// escolher a tabela preenche o preço da hora (que continua editável)
+function escolherTabela(s, id) {
+  s.tabela = id
+  const t = store.tabelaPreco(id)
+  if (t) s.ph = t.preco
+}
 
 const T = computed(() => store.totais(os.value))
 const mostrarTaxa = computed(() => T.value.taxa > 0)
@@ -409,12 +572,90 @@ const colunasPecas = computed(() =>
 )
 const colunasServicos = computed(() =>
   mostrarTaxa.value
-    ? 'minmax(260px, 3fr) 90px 120px 120px 140px 40px'
-    : 'minmax(260px, 3fr) 90px 120px 120px 40px'
+    ? 'minmax(240px, 3fr) 170px 80px 110px 120px 140px 40px'
+    : 'minmax(240px, 3fr) 170px 80px 110px 120px 40px'
 )
 
 const somaParcelas = computed(() => os.value.pagamento.lista.reduce((a, p) => a + num(p.valor), 0))
 const diferencaParcelas = computed(() => Math.abs(somaParcelas.value - T.value.totalCliente) > 0.009)
+
+// ---- cliente e veículo
+// sugestões enquanto digita; o texto digitado vale como cliente novo até escolher um da lista
+let buscaClienteTimer = null
+
+function digitarCliente(texto) {
+  os.value.cliente = texto || ''
+  os.value.clienteId = null
+  veiculosDoCliente.value = []
+  clearTimeout(buscaClienteTimer)
+  if (!texto || texto.trim().length < 2) {
+    menuClientes.value = false
+    return
+  }
+  buscaClienteTimer = setTimeout(async () => {
+    try {
+      sugestoesCliente.value = await buscarClientes(texto.trim())
+      menuClientes.value = sugestoesCliente.value.length > 0
+    } catch {
+      menuClientes.value = false
+    }
+  }, 300)
+}
+
+function fecharSugestoes() {
+  clearTimeout(buscaClienteTimer)
+  menuClientes.value = false
+}
+
+function escolherCliente(c) {
+  menuClientes.value = false
+  os.value.cliente = c.nome
+  os.value.clienteId = c.id
+  if (c.tipo_cliente_id && c.tipo_cliente_id !== os.value.tipo) mudarTipo(c.tipo_cliente_id)
+  veiculosDoCliente.value = c.veiculos
+  if (!os.value.placa && c.veiculos.length === 1) usarVeiculo(c.veiculos[0])
+}
+
+function usarVeiculo(v) {
+  os.value.placa = v.placa
+  os.value.veiculo = v.modelo
+  os.value.veiculoId = v.id
+  avisoPlaca.value = ''
+}
+
+// ao sair do campo placa: se já está cadastrada, completa o veículo e (se vazio) o cliente
+async function buscarPlaca() {
+  const placa = (os.value.placa || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  os.value.placa = placa
+  avisoPlaca.value = ''
+  if (placa.length !== 7) {
+    os.value.veiculoId = null
+    if (placa) avisoPlaca.value = 'A placa precisa ter 7 letras e números (ex.: AAA0A00).'
+    return
+  }
+  buscandoPlaca.value = true
+  try {
+    const v = await veiculoPorPlaca(placa)
+    if (!v) {
+      os.value.veiculoId = null
+      avisoPlaca.value = 'Placa nova: o veículo será cadastrado ao salvar a O.S.'
+      return
+    }
+    os.value.veiculoId = v.id
+    if (!os.value.veiculo) os.value.veiculo = v.modelo
+    if (!os.value.cliente) {
+      os.value.cliente = v.cliente.nome
+      os.value.clienteId = v.cliente.id
+      if (v.cliente.tipo_cliente_id !== os.value.tipo) mudarTipo(v.cliente.tipo_cliente_id)
+    } else if (os.value.clienteId && os.value.clienteId !== v.cliente.id) {
+      avisoPlaca.value = 'Este veículo está cadastrado para ' + v.cliente.nome + '.'
+    }
+  } catch {
+    // sem a busca ainda dá para digitar tudo à mão
+  } finally {
+    buscandoPlaca.value = false
+  }
+}
 
 // ---- peças
 function adicionarPeca() {
@@ -422,37 +663,79 @@ function adicionarPeca() {
 }
 
 function abrirEstoque(i) {
+  // peça ligada a um produto (est = id do produto) abre o cadastro dele;
+  // senão abre um produto novo já com o nome e o código digitados
   const p = os.value.pecas[i]
-  const noEstoque = p.est !== null && p.est !== undefined
-  produtoDialog.produto = noEstoque ? store.estoque[p.est] : store.novoProduto(p.nome, p.codigo)
-  produtoDialog.indice = noEstoque ? p.est : null
+  produtoDialog.id = p.est || null
+  produtoDialog.inicial = { nome: p.nome, codigo: p.codigo }
   produtoDialog.peca = i
   produtoDialog.aberto = true
 }
 
-function produtoSalvo({ produto, indice }) {
+function produtoSalvo(produto) {
   Object.assign(os.value.pecas[produtoDialog.peca], {
     nome: produto.nome,
     codigo: produto.codigo,
-    unit: dec(store.precoVenda(produto)),
-    est: indice
+    unit: dec(produto.preco_venda),
+    est: produto.id
   })
+  store.carregarResumoEstoque()
   $q.notify({ message: 'Produto salvo e preço atualizado na O.S.', color: 'dark' })
 }
 
-// ---- serviços
+// ---- serviços e pré-salvos
 function adicionarServico() {
-  os.value.servicos.push({ desc: '', horas: '', ph: store.precoHoraPadrao })
+  os.value.servicos.push(store.servico('', ''))
+}
+
+async function carregarSalvos() {
+  carregandoSalvos.value = true
+  try {
+    salvos.value = await listarServicosSalvos(os.value.veiculoId)
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative' })
+  } finally {
+    carregandoSalvos.value = false
+  }
+}
+
+function alternarSalvos() {
+  salvosAbertos.value = !salvosAbertos.value
+  if (salvosAbertos.value) carregarSalvos()
 }
 
 function usarSalvo(sv) {
-  os.value.servicos.push({ desc: sv.desc, horas: sv.horas, ph: store.precoHoraPadrao })
+  os.value.servicos.push(store.servico(sv.desc, sv.horas))
 }
 
-function salvarComoPreSalvos() {
-  const novos = os.value.servicos.filter((s) => s.desc).map((s) => ({ desc: s.desc, horas: s.horas }))
-  store.servicosSalvos.push(...novos)
-  $q.notify({ message: 'Serviços salvos como pré-salvos.', color: 'dark' })
+async function atualizarSalvo(sv) {
+  try {
+    await atualizarServicoSalvo(sv)
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative' })
+  }
+}
+
+async function excluirSalvo(sv) {
+  try {
+    await apagarServicoSalvo(sv.id)
+    salvos.value = salvos.value.filter((x) => x.id !== sv.id)
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative' })
+  }
+}
+
+async function salvarComoPreSalvos() {
+  const novos = os.value.servicos.filter((s) => s.desc.trim())
+  if (!novos.length) return
+  try {
+    // ficam ligados ao veículo quando a O.S já tem um veículo cadastrado
+    await criarServicosSalvos(novos, os.value.veiculoId)
+    $q.notify({ message: 'Serviços salvos como pré-salvos.', color: 'dark' })
+    if (salvosAbertos.value) carregarSalvos()
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative' })
+  }
 }
 
 // ---- pagamento
@@ -462,6 +745,8 @@ function recalcularParcelas() {
 
 function mudarTipo(tipo) {
   os.value.tipo = tipo
+  // tipo novo: vale a taxa de hoje desse tipo
+  os.value.taxa = store.tiposCliente.find((t) => t.id === tipo)?.taxa ?? '0'
   recalcularParcelas()
 }
 
@@ -491,11 +776,65 @@ function mudarForma(v) {
 }
 
 // ---- salvar
-function salvar() {
-  const nova = !os.value.id
-  const id = store.salvarOrdem(os.value)
-  os.value.id = id
-  $q.notify({ message: 'O.S ' + id + ' salva.', color: 'dark' })
-  if (nova) router.replace('/orcamentos/' + id)
+async function salvar() {
+  if (!os.value.cliente.trim()) {
+    $q.notify({ message: 'Informe o cliente.', color: 'negative', position: 'top' })
+    return
+  }
+  salvando.value = true
+  try {
+    const nova = !os.value.numero
+    const salva = await salvarOrdem(os.value)
+    usar(salva)
+    store.carregarResumoEstoque()
+    $q.notify({ message: 'O.S ' + numeroOS(salva.numero) + ' salva.', color: 'positive', icon: 'check' })
+    if (nova) router.replace('/orcamentos/' + numeroOS(salva.numero))
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative', timeout: 6000, position: 'top' })
+  } finally {
+    salvando.value = false
+  }
 }
+
+async function excluir() {
+  if (!(await confirmarExclusao($q, 'a O.S ' + numeroOS(os.value.numero)))) return
+  excluindo.value = true
+  try {
+    await excluirOrdem(os.value.numero)
+    const numero = numeroOS(os.value.numero)
+    original.value = JSON.stringify(os.value) // já foi excluída: não perguntar "sair sem salvar?"
+    store.carregarResumoEstoque()
+    $q.notify({ message: 'O.S ' + numero + ' excluída.', color: 'dark' })
+    router.replace('/orcamentos')
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative', position: 'top' })
+  } finally {
+    excluindo.value = false
+  }
+}
+
+// avisa antes de sair com alterações não salvas
+onBeforeRouteLeave(() => {
+  if (!alterado.value) return true
+  return new Promise((resolve) => {
+    $q.dialog({
+      title: 'Sair sem salvar?',
+      message: 'As alterações nesta O.S vão ser perdidas.',
+      ok: { label: 'Sair sem salvar', color: 'negative', unelevated: true, noCaps: true },
+      cancel: { label: 'Continuar editando', flat: true, noCaps: true, color: 'grey-8' },
+      persistent: true
+    })
+      .onOk(() => resolve(true))
+      .onCancel(() => resolve(false))
+  })
+})
+
+function avisoAoFechar(e) {
+  if (alterado.value) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+window.addEventListener('beforeunload', avisoAoFechar)
+onBeforeUnmount(() => window.removeEventListener('beforeunload', avisoAoFechar))
 </script>

@@ -1,21 +1,29 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/boot/axios'
+import { resumoEstoque } from '@/api/produtos'
 import { num, dec, addMonths, hojeIso, paraTexto } from '@/utils/formato'
 
 export const STATUS = ['Em aberto', 'Finalizado', 'Pendente', 'Não aprovado']
 
 export const FORMAS_PAGAMENTO = ['PIX', 'Dinheiro', 'Débito', 'Crédito', 'Pendente']
 
-function copia(obj) {
-  return JSON.parse(JSON.stringify(obj))
-}
-
 export const useOficinaStore = defineStore('oficina', () => {
   // ---- configurações (vêm da API: GET /api/configuracoes)
   // números ficam como texto no padrão brasileiro ("8,5"), igual ao que se digita nos campos
   const configCarregada = ref(false)
-  const tiposCliente = ref([]) // { id, nome, taxa }
+
+  // tipos de cliente, fornecedores e tabelas de preço vêm com os desativados (ativo: false):
+  // eles somem das listas de escolha, mas O.S e produtos antigos ainda mostram o nome
+  const tiposCliente = ref([]) // { id, nome, taxa, ativo }
+  const fornecedores = ref([]) // { id, nome, st, frete, desp, ativo }
+  const tabelasPreco = ref([]) // { id, nome, preco, padrao, ativo }
+
+  const tiposAtivos = computed(() => tiposCliente.value.filter((t) => t.ativo))
+  const fornecedoresAtivos = computed(() => fornecedores.value.filter((f) => f.ativo))
+  const tabelasAtivas = computed(() => tabelasPreco.value.filter((t) => t.ativo))
+  const tabelaPadrao = computed(() => tabelasAtivas.value.find((t) => t.padrao) || tabelasAtivas.value[0] || null)
+  const precoHoraPadrao = computed(() => (tabelaPadrao.value ? tabelaPadrao.value.preco : '0,00'))
 
   // margem de lucro por faixa de custo; "ate" vazio = sem limite
   const faixas = ref([
@@ -27,22 +35,20 @@ export const useOficinaStore = defineStore('oficina', () => {
     { ate: '', margem: '55' },
   ])
 
-  const fornecedores = ref([]) // { id, nome, st, frete, desp }
-
   const autoPadrao = ref(true)
-  const precoHoraPadrao = ref('150,00')
 
   function aplicarConfiguracoes(d) {
     autoPadrao.value = d.preco_auto_padrao
-    precoHoraPadrao.value = dec(d.preco_hora_padrao)
-    tiposCliente.value = d.tipos_cliente.map((t) => ({ id: t.id, nome: t.nome, taxa: paraTexto(t.taxa_percent) }))
+    tiposCliente.value = d.tipos_cliente.map((t) => ({ id: t.id, nome: t.nome, taxa: paraTexto(t.taxa_percent), ativo: t.ativo }))
     faixas.value = d.faixas_margem.map((f) => ({ id: f.id, ate: paraTexto(f.ate_valor), margem: paraTexto(f.margem_percent) }))
+    tabelasPreco.value = d.tabelas_preco.map((t) => ({ id: t.id, nome: t.nome, preco: dec(t.preco_hora), padrao: t.padrao, ativo: t.ativo }))
     fornecedores.value = d.fornecedores.map((f) => ({
       id: f.id,
       nome: f.nome,
       st: paraTexto(f.st_percent),
       frete: paraTexto(f.frete_percent),
       desp: paraTexto(f.despesas_percent),
+      ativo: f.ativo,
     }))
     configCarregada.value = true
   }
@@ -52,16 +58,16 @@ export const useOficinaStore = defineStore('oficina', () => {
     aplicarConfiguracoes(data)
   }
 
-  // recebe a tela inteira (mesmo formato do store) e grava de uma vez
+  // recebe a tela inteira (só os itens ativos; o que saiu da lista é desativado pela API)
   async function salvarConfiguracoes(c) {
     const { data } = await api.put('/configuracoes', {
       preco_auto_padrao: c.autoPadrao,
-      preco_hora_padrao: num(c.precoHoraPadrao),
-      tipos_cliente: c.tiposCliente.map((t) => ({ id: t.id, taxa_percent: num(t.taxa) })),
+      tipos_cliente: c.tiposCliente.map((t) => ({ id: t.id || null, nome: t.nome, taxa_percent: num(t.taxa) })),
       faixas_margem: c.faixas.map((f) => ({
         ate_valor: f.ate === '' || f.ate === null ? null : num(f.ate),
         margem_percent: num(f.margem),
       })),
+      tabelas_preco: c.tabelasPreco.map((t) => ({ id: t.id || null, nome: t.nome, preco_hora: num(t.preco), padrao: !!t.padrao })),
       fornecedores: c.fornecedores.map((f) => ({
         id: f.id || null,
         nome: f.nome,
@@ -79,38 +85,20 @@ export const useOficinaStore = defineStore('oficina', () => {
   }
 
   function tipoPadraoId() {
-    const t = tiposCliente.value.find((x) => x.nome === 'Particular') || tiposCliente.value[0]
+    const t = tiposAtivos.value.find((x) => x.nome === 'Particular') || tiposAtivos.value[0]
     return t ? t.id : null
   }
 
-  // ---- estoque
-  function produto(nome, codigo, marca, ncm, qtd, min, max, custo, fornecedor, criado, alterado) {
-    return {
-      nome,
-      codigo,
-      marca,
-      ncm,
-      qtd,
-      min,
-      max,
-      custo,
-      fornecedor,
-      auto: true,
-      margem: '',
-      venda: '',
-      criado,
-      alterado,
-    }
+  function tabelaPreco(id) {
+    return tabelasPreco.value.find((t) => t.id === id) || null
   }
 
-  const estoque = ref([
-    produto('Filtro de óleo', 'FO-651', 'Marca A', '8421.23.00', '2', '4', '12', '34,50', 'Fornecedor A', '12/08/2026', '28/09/2026'),
-    produto('Filtro de combustível', 'FC-651', 'Marca A', '8421.23.00', '5', '3', '10', '94,00', 'Fornecedor B', '12/08/2026', '15/09/2026'),
-    produto('Óleo motor 5W30 (litro)', 'OL-5W30', 'Marca B', '2710.19.32', '38', '20', '80', '26,00', 'Fornecedor A', '03/07/2026', '01/10/2026'),
-    produto('Pastilha de freio dianteira', 'PF-415', 'Marca C', '6813.81.10', '1', '2', '6', '228,00', 'Fornecedor B', '20/06/2026', '30/09/2026'),
-    produto('Disco de freio dianteiro', 'DF-415', 'Marca C', '8708.30.11', '4', '2', '8', '389,00', 'Fornecedor C', '20/06/2026', '10/09/2026'),
-    produto('Correia poli-V', 'CP-651', 'Marca A', '4010.31.00', '3', '2', '6', '142,00', 'Fornecedor A', '05/05/2026', '22/08/2026'),
-  ])
+  // ---- estoque (produtos vêm da API: src/api/produtos.js)
+  const qtdRepor = ref(0)
+
+  async function carregarResumoEstoque() {
+    qtdRepor.value = (await resumoEstoque()).abaixo_minimo
+  }
 
   function faixaIndice(custo) {
     const f = faixas.value
@@ -129,14 +117,15 @@ export const useOficinaStore = defineStore('oficina', () => {
     return 'R$ ' + f[i - 1].ate + ' a R$ ' + f[i].ate
   }
 
-  function fornecedor(nome) {
-    return fornecedores.value.find((x) => x.nome === nome) || { nome, st: '0', frete: '0', desp: '0' }
+  function fornecedor(id) {
+    return fornecedores.value.find((x) => x.id === id) || { id: null, nome: '', st: '0', frete: '0', desp: '0' }
   }
 
+  // prévia enquanto se digita; o preço que vale é o calculado pela API (app/Services/Precificacao.php)
   // custo + encargos do fornecedor + margem da faixa (ou a margem digitada)
-  function preco(custoTexto, nomeFornecedor, margemTexto) {
+  function preco(custoTexto, fornecedorId, margemTexto) {
     const custo = num(custoTexto)
-    const f = fornecedor(nomeFornecedor)
+    const f = fornecedor(fornecedorId)
     const encargos = num(f.st) + num(f.frete) + num(f.desp)
     const efetivo = custo * (1 + encargos / 100)
     const fi = faixaIndice(custo)
@@ -146,62 +135,16 @@ export const useOficinaStore = defineStore('oficina', () => {
     return { custo, fornecedor: f, encargos, efetivo, faixa: fi, sugerida, margem, venda: efetivo * (1 + margem / 100) }
   }
 
-  function precoVenda(p) {
-    return p.auto === false ? num(p.venda) : preco(p.custo, p.fornecedor, p.margem).venda
-  }
-
-  function abaixoDoMinimo(p) {
-    return p.min !== '' && num(p.qtd) <= num(p.min)
-  }
-
-  const qtdRepor = computed(() => estoque.value.filter(abaixoDoMinimo).length)
-
-  function novoProduto(nome = '', codigo = '') {
-    return {
-      nome,
-      codigo,
-      marca: '',
-      ncm: '',
-      qtd: '0',
-      min: '',
-      max: '',
-      custo: '',
-      fornecedor: fornecedores.value[0] ? fornecedores.value[0].nome : '',
-      auto: autoPadrao.value,
-      margem: '',
-      venda: '',
-      criado: new Date().toLocaleDateString('pt-BR'),
-      alterado: '',
-    }
-  }
-
-  // devolve o índice do produto no estoque
-  function salvarProduto(p, indice) {
-    const salvo = { ...copia(p), alterado: new Date().toLocaleDateString('pt-BR') }
-    if (indice === null || indice === undefined) {
-      estoque.value.push(salvo)
-      return estoque.value.length - 1
-    }
-    estoque.value[indice] = salvo
-    return indice
-  }
-
-  // ---- serviços pré-salvos
-  const servicosSalvos = ref([
-    { desc: 'Troca de óleo e filtros (motor OM651)', horas: '1' },
-    { desc: 'Substituição das pastilhas de freio dianteiras', horas: '1,5' },
-    { desc: 'Limpeza e teste de bicos injetores', horas: '2,5' },
-    { desc: 'Diagnóstico eletrônico com scanner', horas: '0,5' },
-  ])
-
   // ---- ordens de serviço
   function taxaDoTipo(id) {
     const t = tiposCliente.value.find((x) => x.id === id)
     return t ? num(t.taxa) : 0
   }
 
+  // prévia dos totais enquanto se edita; o valor que vale é o calculado pela API (CalculoOrcamento.php).
+  // os.taxa = taxa gravada na O.S no dia em que foi feita (não muda se a configuração mudar depois)
   function totais(os) {
-    const taxa = taxaDoTipo(os.tipo)
+    const taxa = os.taxa !== undefined && os.taxa !== null ? num(os.taxa) : taxaDoTipo(os.tipo)
     const pecas = os.pecas.reduce((a, p) => a + num(p.qtd) * num(p.unit), 0)
     const servicos = os.servicos.reduce((a, s) => a + num(s.horas) * num(s.ph), 0)
     const total = pecas + servicos
@@ -227,65 +170,21 @@ export const useOficinaStore = defineStore('oficina', () => {
     return lista
   }
 
-  function peca(i, qtd) {
-    const p = estoque.value[i]
-    return { nome: p.nome, codigo: p.codigo, qtd, unit: dec(precoVenda(p)), est: i }
-  }
-
   function servico(desc, horas) {
-    return { desc, horas, ph: precoHoraPadrao.value }
-  }
-
-  function ordem(id, data, cliente, tipo, veiculo, placa, status, pecas, servicos, parcelas) {
-    const os = {
-      id,
-      data,
-      cliente,
-      tipo,
-      veiculo,
-      placa,
-      status,
-      pecas,
-      servicos,
-      obsAnalise: '',
-      obsInterna: '',
-      desconto: { tipo: 'valor', valor: '' },
-      pagamento: { parcelas: String(parcelas), data: addMonths(data, 0), forma: 'PIX', obs: '', lista: [] },
-    }
-    os.pagamento.lista = gerarParcelas(os)
-    return os
-  }
-
-  const ordens = ref([
-    ordem('0148', '2026-10-03', 'IMASUL', 3, 'Sprinter 415 CDI (OM651)', 'QAX4F21', 'Em aberto',
-      [peca(0, '1'), peca(2, '9'), peca(1, '1'), peca(3, '1')],
-      [servico('Troca de óleo e filtros (motor OM651)', '1'), servico('Substituição das pastilhas de freio dianteiras', '1,5')], 2),
-    ordem('0147', '2026-10-02', 'Prefeitura de Corguinhos', 2, 'Hilux 2.8 CD', 'RRB7C43', 'Pendente',
-      [peca(4, '2'), peca(3, '1')], [servico('Substituição de discos e pastilhas dianteiros', '3')], 3),
-    ordem('0146', '2026-10-01', 'Marcos A. Silva', 1, 'Onix 1.0 Turbo', 'QAE2J18', 'Finalizado',
-      [peca(0, '1'), peca(2, '4')], [servico('Troca de óleo e filtro', '0,5')], 1),
-    ordem('0145', '2026-09-30', 'Prefeitura de Alcinópolis', 6, 'S10 2.8 LTZ', 'RWE5D09', 'Em aberto',
-      [peca(5, '1'), peca(1, '1'), peca(0, '1'), peca(2, '7')], [servico('Troca da correia poli-V', '2'), servico('Revisão de filtros', '1')], 2),
-    ordem('0144', '2026-09-29', 'Frota via Link', 4, 'Ducato Minibus', 'QAJ8H66', 'Não aprovado',
-      [peca(4, '2'), peca(3, '1')], [servico('Substituição de discos e pastilhas dianteiros', '3')], 1),
-    ordem('0143', '2026-09-27', 'Prefeitura de Paraíso das Águas', 5, 'Ranger 3.2', 'QAR1B52', 'Finalizado',
-      [peca(5, '1'), peca(4, '2'), peca(3, '1')], [servico('Diagnóstico eletrônico com scanner', '0,5'), servico('Freios dianteiros completos', '3')], 2),
-    ordem('0142', '2026-09-26', 'Ana Paula Rezende', 1, 'HB20 1.6', 'QAC6G37', 'Em aberto',
-      [peca(0, '1'), peca(2, '4')], [servico('Troca de óleo e filtro', '0,5')], 1),
-  ])
-
-  function proximoNumero() {
-    const maior = ordens.value.reduce((a, o) => Math.max(a, parseInt(o.id, 10) || 0), 0)
-    return String(maior + 1).padStart(4, '0')
+    return { desc, horas, tabela: tabelaPadrao.value?.id ?? null, ph: precoHoraPadrao.value }
   }
 
   function novaOrdem() {
     const hoje = hojeIso()
+    const tipo = tipoPadraoId()
     const os = {
-      id: '',
+      numero: null,
       data: hoje,
+      clienteId: null,
       cliente: '',
-      tipo: tipoPadraoId(),
+      tipo,
+      taxa: tiposCliente.value.find((t) => t.id === tipo)?.taxa ?? '0',
+      veiculoId: null,
       veiculo: '',
       placa: '',
       status: 'Em aberto',
@@ -300,46 +199,30 @@ export const useOficinaStore = defineStore('oficina', () => {
     return os
   }
 
-  // cópia para edição; só volta para a lista ao salvar
-  function buscarOrdem(id) {
-    const os = ordens.value.find((o) => o.id === id)
-    return os ? copia(os) : null
-  }
-
-  function salvarOrdem(os) {
-    const salva = copia(os)
-    if (!salva.id) salva.id = proximoNumero()
-    const i = ordens.value.findIndex((o) => o.id === salva.id)
-    if (i >= 0) ordens.value[i] = salva
-    else ordens.value.unshift(salva)
-    return salva.id
-  }
-
   return {
     configCarregada,
     tiposCliente,
+    tiposAtivos,
     faixas,
     fornecedores,
+    fornecedoresAtivos,
+    tabelasPreco,
+    tabelasAtivas,
+    tabelaPadrao,
+    tabelaPreco,
     autoPadrao,
     precoHoraPadrao,
+    servico,
     carregarConfiguracoes,
     salvarConfiguracoes,
     tipoLabel,
-    estoque,
-    servicosSalvos,
-    ordens,
     qtdRepor,
+    carregarResumoEstoque,
     faixaTexto,
     preco,
-    precoVenda,
-    abaixoDoMinimo,
-    novoProduto,
-    salvarProduto,
     taxaDoTipo,
     totais,
     gerarParcelas,
     novaOrdem,
-    buscarOrdem,
-    salvarOrdem,
   }
 })

@@ -90,6 +90,9 @@ onMounted(() => {
   store.carregarConfiguracoes().catch((e) => {
     $q.notify({ message: 'Não foi possível carregar as configurações. ' + mensagemDeErro(e), color: 'negative' })
   })
+  store.carregarResumoEstoque().catch(() => {
+    // só o número do menu: sem ele a tela segue funcionando
+  })
 })
 
 const nomeOficina = computed(() => auth.usuario?.oficina.nome || 'Centro Automotivo Mattos')
