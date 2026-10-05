@@ -13,7 +13,9 @@
           <span v-if="alterado" class="text-grey-7 text-weight-regular q-ml-sm" style="font-size: 14px">· não salvo</span>
         </h1>
         <q-select v-model="os.status" :options="STATUS" label="Status" outlined dense style="width: 170px" />
-        <q-btn outline no-caps color="grey-8" icon="print" label="Imprimir" @click="impressaoAberta = true" />
+        <q-btn outline no-caps color="grey-8" icon="print" label="Imprimir" :disable="!os.numero" @click="impressaoAberta = true">
+          <q-tooltip v-if="!os.numero">Salve a O.S antes de imprimir</q-tooltip>
+        </q-btn>
         <q-btn
           v-if="os.numero && ehAdmin"
           outline
@@ -438,6 +440,8 @@
       v-model="impressaoAberta"
       :alvo="'O.S ' + (numeroOS(os.numero) || 'nova')"
       :tipo-cliente="os.tipo"
+      :numeros="os.numero ? [os.numero] : []"
+      :aviso="alterado ? 'Esta O.S tem alterações não salvas: o PDF sai com a última versão salva.' : ''"
     />
   </q-page>
 </template>

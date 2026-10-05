@@ -66,7 +66,7 @@
         <span class="col text-weight-bold q-pl-sm" style="font-size: 14px">
           {{ selecionadas.length }} selecionada(s)
         </span>
-        <q-btn no-caps unelevated color="white" text-color="dark" label="Imprimir selecionadas" @click="abrirImpressao(selecionadas.length + ' O.S selecionadas', '')" />
+        <q-btn no-caps unelevated color="white" text-color="dark" label="Imprimir selecionadas" @click="abrirImpressao(selecionadas.length + ' O.S selecionadas', '', selecionadas.map((o) => o.numero))" />
         <q-btn no-caps unelevated color="white" text-color="dark" label="Enviar por e-mail" @click="avisar(selecionadas.length + ' O.S prontas para enviar por e-mail.')" />
         <q-btn
           v-if="ehAdmin"
@@ -142,7 +142,7 @@
             <q-btn flat round dense icon="more_horiz" color="grey-8" aria-label="Ações da O.S">
               <q-menu anchor="bottom right" self="top right">
                 <q-list style="min-width: 230px">
-                  <q-item v-close-popup clickable @click="abrirImpressao('O.S ' + numeroOS(props.row.numero), props.row.tipo_cliente_id)">
+                  <q-item v-close-popup clickable @click="abrirImpressao('O.S ' + numeroOS(props.row.numero), props.row.tipo_cliente_id, [props.row.numero])">
                     <q-item-section avatar><q-icon name="print" /></q-item-section>
                     <q-item-section>Imprimir…</q-item-section>
                   </q-item>
@@ -169,7 +169,7 @@
       </q-table>
     </div>
 
-    <ImprimirDialog v-model="impressao.aberta" :alvo="impressao.alvo" :tipo-cliente="impressao.tipo" />
+    <ImprimirDialog v-model="impressao.aberta" :alvo="impressao.alvo" :tipo-cliente="impressao.tipo" :numeros="impressao.numeros" />
   </q-page>
 </template>
 
@@ -197,7 +197,7 @@ const dataDe = ref('')
 const dataAte = ref('')
 const filtroStatus = ref('todos')
 const selecionadas = ref([])
-const impressao = reactive({ aberta: false, alvo: '', tipo: '' })
+const impressao = reactive({ aberta: false, alvo: '', tipo: '', numeros: [] })
 
 const ordens = ref([])
 const contagem = ref({})
@@ -266,9 +266,10 @@ watch([busca, filtroTipo, dataDe, dataAte, filtroStatus], () => {
 
 onMounted(carregar)
 
-function abrirImpressao(alvo, tipo) {
+function abrirImpressao(alvo, tipo, numeros) {
   impressao.alvo = alvo
   impressao.tipo = tipo
+  impressao.numeros = numeros
   impressao.aberta = true
 }
 

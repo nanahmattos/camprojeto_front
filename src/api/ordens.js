@@ -27,6 +27,42 @@ export async function salvarOrdem(form) {
   return paraForm(data.data)
 }
 
+/**
+ * Gera o PDF na API e abre numa aba nova (de onde dá para imprimir ou salvar).
+ * A aba é aberta antes da espera, ainda dentro do clique, para o navegador não bloquear.
+ */
+export async function abrirPdf(numeros, tipo) {
+  const aba = window.open('', '_blank')
+  if (aba) aba.document.write('<p style="font-family: sans-serif; padding: 24px">Gerando PDF…</p>')
+  try {
+    const url = numeros.length === 1 ? '/ordens/' + numeros[0] + '/pdf' : '/ordens/pdf'
+    const params = numeros.length === 1 ? { tipo } : { tipo, numeros: numeros.join(',') }
+    const { data } = await api.get(url, { params, responseType: 'blob' })
+    const link = URL.createObjectURL(data)
+    if (aba) {
+      aba.location.href = link
+    } else {
+      // pop-up bloqueado: baixa o arquivo
+      const a = document.createElement('a')
+      a.href = link
+      a.download = 'OS-' + numeros.map((n) => numeroOS(n)).join('-') + '-' + tipo + '.pdf'
+      a.click()
+    }
+    setTimeout(() => URL.revokeObjectURL(link), 60000)
+  } catch (e) {
+    if (aba) aba.close()
+    // o erro veio como blob: lê o JSON para mostrar a mensagem da API
+    if (e.response?.data instanceof Blob) {
+      try {
+        e.response.data = JSON.parse(await e.response.data.text())
+      } catch {
+        // mantém o erro original
+      }
+    }
+    throw e
+  }
+}
+
 export async function excluirOrdem(numero) {
   await api.delete('/ordens/' + numero)
 }

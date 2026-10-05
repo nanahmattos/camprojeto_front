@@ -12,6 +12,10 @@
       <q-separator />
 
       <q-card-section class="column q-gutter-y-sm" role="radiogroup" aria-label="Tipo de impressão">
+        <q-banner v-if="aviso" dense rounded class="bg-orange-1 text-brown-9 q-mb-sm">
+          <template #avatar><q-icon name="info_outline" /></template>
+          {{ aviso }}
+        </q-banner>
         <label
           v-for="op in opcoes"
           :key="op.value"
@@ -39,7 +43,7 @@
 
       <q-card-actions align="right" class="q-pa-md">
         <q-btn outline no-caps color="grey-8" label="Cancelar" v-close-popup />
-        <q-btn unelevated no-caps color="primary" label="Imprimir" @click="imprimir" />
+        <q-btn unelevated no-caps color="primary" icon="picture_as_pdf" label="Gerar PDF" :loading="gerando" @click="imprimir" />
       </q-card-actions>
     </q-card>
   </q-dialog>
@@ -50,13 +54,19 @@ import { ref, computed } from 'vue'
 import { useQuasar } from 'quasar'
 import { useOficinaStore } from '@/stores/oficina'
 import { pct } from '@/utils/formato'
+import { mensagemDeErro } from '@/boot/axios'
+import { abrirPdf } from '@/api/ordens'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   // texto do título: "O.S 0148", "3 O.S selecionadas"…
   alvo: { type: String, default: '' },
   // tipo de cliente da O.S, para saber se sai a coluna da taxa
-  tipoCliente: { type: [Number, String], default: '' }
+  tipoCliente: { type: [Number, String], default: '' },
+  // números das O.S a imprimir (várias saem num PDF só)
+  numeros: { type: Array, default: () => [] },
+  // aviso opcional no topo (ex.: alterações ainda não salvas)
+  aviso: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -64,6 +74,7 @@ const emit = defineEmits(['update:modelValue'])
 const $q = useQuasar()
 const store = useOficinaStore()
 const tipo = ref('cliente')
+const gerando = ref(false)
 
 const opcoes = [
   {
@@ -98,8 +109,16 @@ const colunas = computed(() => {
   }
 })
 
-function imprimir() {
-  emit('update:modelValue', false)
-  $q.notify({ message: 'Enviado para a impressora.', color: 'dark' })
+async function imprimir() {
+  if (!props.numeros.length) return
+  gerando.value = true
+  try {
+    await abrirPdf(props.numeros, tipo.value)
+    emit('update:modelValue', false)
+  } catch (e) {
+    $q.notify({ message: 'Não foi possível gerar o PDF. ' + mensagemDeErro(e), color: 'negative', position: 'top' })
+  } finally {
+    gerando.value = false
+  }
 }
 </script>
