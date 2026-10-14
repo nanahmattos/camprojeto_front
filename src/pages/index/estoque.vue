@@ -43,9 +43,9 @@
           <template #prepend><q-icon name="search" /></template>
         </q-input>
         <q-select
-          v-model="filtroFornecedor"
-          :options="opcoesFornecedor"
-          label="Fornecedor"
+          v-model="filtroCategoria"
+          :options="opcoesCategoria"
+          label="Categoria"
           emit-value
           map-options
           outlined
@@ -94,6 +94,17 @@
         <template #body-cell-acoes="props">
           <q-td :props="props">
             <q-btn flat round dense icon="edit" color="grey-8" aria-label="Editar produto" @click.stop="abrirProduto(props.row.id)" />
+            <q-btn
+              v-if="ehAdmin"
+              flat
+              round
+              dense
+              icon="delete_outline"
+              color="negative"
+              aria-label="Excluir produto"
+              :loading="excluindo === props.row.id"
+              @click.stop="excluir(props.row)"
+            />
           </q-td>
         </template>
       </q-table>
@@ -113,15 +124,19 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { useOficinaStore } from '@/stores/oficina'
 import { mensagemDeErro } from '@/boot/axios'
-import { listarProdutos } from '@/api/produtos'
+import { useAuthStore } from '@/stores/auth'
+import { listarProdutos, excluirProduto } from '@/api/produtos'
 import { brl } from '@/utils/formato'
 import ProdutoDialog from '@/components/ProdutoDialog.vue'
 
 const $q = useQuasar()
 const store = useOficinaStore()
+const auth = useAuthStore()
+const ehAdmin = computed(() => auth.usuario?.papel === 'admin')
+const excluindo = ref(null)
 
 const busca = ref('')
-const filtroFornecedor = ref(null)
+const filtroCategoria = ref(null)
 const soAbaixo = ref(false)
 const dialogo = reactive({ aberto: false, id: null })
 
@@ -130,9 +145,9 @@ const carregando = ref(false)
 const erro = ref('')
 const paginacao = ref({ page: 1, rowsPerPage: 25, rowsNumber: 0, sortBy: 'nome', descending: false })
 
-const opcoesFornecedor = computed(() => [
-  { value: null, label: 'Todos' },
-  ...store.fornecedoresAtivos.map((f) => ({ value: f.id, label: f.nome }))
+const opcoesCategoria = computed(() => [
+  { value: null, label: 'Todas' },
+  ...store.categoriasAtivas.map((c) => ({ value: c.id, label: c.nome }))
 ])
 
 const mono = 'text-mono'
@@ -140,9 +155,11 @@ const qtd = (v) => (v === null ? '—' : String(v).replace('.', ','))
 const colunas = [
   { name: 'nome', label: 'Produto', field: 'nome', align: 'left', sortable: true },
   { name: 'codigo', label: 'Código', field: 'codigo', align: 'left', classes: mono, sortable: true },
+  { name: 'categoria', label: 'Categoria', field: (p) => p.categoria_nome || '—', align: 'left' },
   { name: 'marca', label: 'Marca', field: (p) => p.marca || '—', align: 'left' },
   { name: 'ncm', label: 'NCM', field: (p) => p.ncm || '—', align: 'left', classes: mono },
   { name: 'qtd_atual', label: 'Qtd', field: 'qtd_atual', format: qtd, align: 'right', sortable: true },
+  { name: 'unidade', label: 'Un.', field: (p) => p.unidade || '—', align: 'left', classes: mono + ' text-grey-8' },
   { name: 'qtd_min', label: 'Mín', field: 'qtd_min', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
   { name: 'qtd_max', label: 'Máx', field: 'qtd_max', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
   { name: 'custo', label: 'Custo', field: 'custo', format: brl, align: 'right', classes: mono, sortable: true },
@@ -159,7 +176,7 @@ async function carregar() {
   try {
     const r = await listarProdutos({
       busca: busca.value || undefined,
-      fornecedor_id: filtroFornecedor.value || undefined,
+      categoria_id: filtroCategoria.value || undefined,
       abaixo_minimo: soAbaixo.value ? 1 : undefined,
       ordenar: p.sortBy || 'nome',
       direcao: p.descending ? 'desc' : 'asc',
@@ -183,7 +200,7 @@ function aoMudarTabela({ pagination }) {
 }
 
 // filtro novo começa da primeira página
-watch([busca, filtroFornecedor, soAbaixo], () => {
+watch([busca, filtroCategoria, soAbaixo], () => {
   paginacao.value = { ...paginacao.value, page: 1 }
   carregar()
 })
@@ -193,6 +210,36 @@ onMounted(carregar)
 function abrirProduto(id) {
   dialogo.id = id
   dialogo.aberto = true
+}
+
+function confirmarExclusao(produto) {
+  return new Promise((resolve) => {
+    $q.dialog({
+      title: 'Excluir ' + produto.nome + '?',
+      message:
+        'O produto sai do estoque e das sugestões da O.S. As O.S antigas e o histórico de movimentações continuam como estão. Cadastrar de novo o mesmo código traz o produto de volta.',
+      ok: { label: 'Excluir', color: 'negative', unelevated: true, noCaps: true },
+      cancel: { label: 'Cancelar', flat: true, noCaps: true, color: 'grey-8' },
+      persistent: true
+    })
+      .onOk(() => resolve(true))
+      .onCancel(() => resolve(false))
+  })
+}
+
+async function excluir(produto) {
+  if (!(await confirmarExclusao(produto))) return
+  excluindo.value = produto.id
+  try {
+    await excluirProduto(produto.id)
+    $q.notify({ message: produto.nome + ' excluído do estoque.', color: 'dark' })
+    carregar()
+    store.carregarResumoEstoque()
+  } catch (e) {
+    $q.notify({ message: mensagemDeErro(e), color: 'negative', position: 'top' })
+  } finally {
+    excluindo.value = null
+  }
 }
 
 function aoSalvar() {

@@ -3,7 +3,7 @@
     <div class="pagina" :style="{ paddingBottom: alterado ? '88px' : '0' }">
       <div>
         <h1 class="titulo-pagina">Configurações</h1>
-        <p class="subtitulo-pagina">Taxas por tipo de cliente, margens de lucro e encargos de fornecedor</p>
+        <p class="subtitulo-pagina">Taxas por tipo de cliente, margens de lucro, encargos de fornecedor e categorias do estoque</p>
       </div>
 
       <q-banner v-if="!podeEditar" dense rounded class="bg-grey-3 text-grey-9">
@@ -129,6 +129,46 @@
                 />
                 <span v-else></span>
               </div>
+            </section>
+
+            <section class="cartao q-pa-md column q-gutter-y-sm q-mt-md" aria-label="Categorias de produto">
+              <div class="row items-center justify-between no-wrap">
+                <h2 class="titulo-secao">Categorias de produto</h2>
+                <q-btn v-if="podeEditar" flat dense no-caps color="primary" icon="add" label="Adicionar" @click="adicionarCategoria" />
+              </div>
+              <p class="texto-apoio">Escolhida no cadastro de cada produto; serve de filtro na tela de Estoque.</p>
+              <p v-if="!form.categorias.length" class="texto-apoio q-py-sm text-center">Nenhuma categoria cadastrada ainda.</p>
+              <div
+                v-for="(c, i) in form.categorias"
+                :key="c.id || 'nova-categoria' + i"
+                class="grade"
+                style="grid-template-columns: minmax(0, 1fr) 40px"
+              >
+                <q-input
+                  v-model="c.nome"
+                  aria-label="Nome da categoria"
+                  placeholder="Ex.: Filtros"
+                  maxlength="60"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  :autofocus="!c.id && i === form.categorias.length - 1"
+                />
+                <q-btn
+                  v-if="podeEditar"
+                  flat
+                  round
+                  dense
+                  icon="delete_outline"
+                  color="grey-8"
+                  :aria-label="'Excluir categoria ' + (c.nome || 'nova')"
+                  @click="form.categorias.splice(i, 1)"
+                />
+                <span v-else></span>
+              </div>
+              <p v-if="form.categorias.length" class="texto-apoio" style="font-size: 12px">
+                Excluir tira a categoria das listas de escolha. Produtos que já usam ela continuam mostrando o nome.
+              </p>
             </section>
           </div>
 
@@ -295,7 +335,8 @@ function copiaDoStore() {
       tiposCliente: store.tiposAtivos,
       tabelasPreco: store.tabelasAtivas,
       faixas: store.faixas,
-      fornecedores: store.fornecedoresAtivos
+      fornecedores: store.fornecedoresAtivos,
+      categorias: store.categoriasAtivas
     })
   )
 }
@@ -343,6 +384,10 @@ function removerTabela(i) {
   const [removida] = form.value.tabelasPreco.splice(i, 1)
   // sempre tem que sobrar uma padrão
   if (removida.padrao && form.value.tabelasPreco.length) form.value.tabelasPreco[0].padrao = true
+}
+
+function adicionarCategoria() {
+  form.value.categorias.push({ id: null, nome: '', ativo: true })
 }
 
 function adicionarFornecedor() {

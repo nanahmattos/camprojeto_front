@@ -142,6 +142,7 @@ export function paraForm(o) {
     pecas: o.pecas.map((p) => ({
       nome: p.nome,
       codigo: p.codigo || '',
+      unidade: p.unidade || '',
       qtd: qtdTexto(p.quantidade),
       unit: dec(p.valor_unit),
       est: p.produto_id
@@ -190,6 +191,7 @@ function paraPayload(f) {
         produto_id: p.est || null,
         nome: p.nome.trim(),
         codigo: p.codigo.trim() || null,
+        unidade: (p.unidade || '').trim().toUpperCase() || null,
         quantidade: num(p.qtd),
         valor_unit: num(p.unit)
       })),

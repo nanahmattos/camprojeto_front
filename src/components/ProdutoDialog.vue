@@ -27,18 +27,29 @@
           <q-input v-model="form.nome" label="Nome do produto" outlined dense class="col-12 col-md-6" />
           <q-input v-model="form.codigo" label="Código" outlined dense input-class="text-mono" class="col-6 col-md-3" />
           <q-input v-model="form.marca" label="Marca" outlined dense class="col-6 col-md-3" />
-          <q-input v-model="form.ncm" label="NCM" placeholder="0000.00.00" outlined dense input-class="text-mono" class="col-6 col-md-3" />
+          <q-select
+            v-model="form.categoria_id"
+            :options="opcoesCategoria"
+            label="Categoria"
+            emit-value
+            map-options
+            outlined
+            dense
+            class="col-6 col-md-3"
+          />
+          <q-input v-model="form.ncm" label="NCM" placeholder="00000000" maxlength="8" outlined dense input-class="text-mono" class="col-6 col-md-2" />
+          <UnidadeSelect v-model="form.unidade" label="Unidade" class="col-6 col-md-1" />
           <q-input
             v-model="form.qtd"
-            :label="produtoId ? 'Quantidade em estoque' : 'Quantidade inicial'"
+            :label="produtoId ? 'Qtd em estoque' : 'Qtd inicial'"
             inputmode="decimal"
             outlined
             dense
             input-class="text-right text-mono"
-            class="col-6 col-md-3"
+            class="col-6 col-md-2"
           />
-          <q-input v-model="form.min" label="Qtd mínima" inputmode="decimal" outlined dense input-class="text-right text-mono" class="col-6 col-md-3" />
-          <q-input v-model="form.max" label="Qtd máxima" inputmode="decimal" outlined dense input-class="text-right text-mono" class="col-6 col-md-3" />
+          <q-input v-model="form.min" label="Qtd mínima" inputmode="decimal" outlined dense input-class="text-right text-mono" class="col-6 col-md-2" />
+          <q-input v-model="form.max" label="Qtd máxima" inputmode="decimal" outlined dense input-class="text-right text-mono" class="col-6 col-md-2" />
           <p v-if="mudouQuantidade" class="col-12 texto-apoio">
             A diferença ({{ diferencaTexto }}) vai ficar registrada como ajuste no histórico do produto.
           </p>
@@ -204,6 +215,7 @@ import { useOficinaStore } from '@/stores/oficina'
 import { mensagemDeErro } from '@/boot/axios'
 import { obterProduto, salvarProduto, listarMovimentacoes, paraForm, formNovo } from '@/api/produtos'
 import { num, brl, dec, pct } from '@/utils/formato'
+import UnidadeSelect from '@/components/UnidadeSelect.vue'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -264,6 +276,13 @@ const opcoesFornecedor = computed(() => [
   ...store.fornecedores
     .filter((f) => f.ativo || f.id === form.value?.fornecedor_id)
     .map((f) => ({ value: f.id, label: f.nome + (f.ativo ? '' : ' (desativado)') }))
+])
+// categorias ativas; a do produto entra mesmo se tiver sido desativada
+const opcoesCategoria = computed(() => [
+  { value: null, label: 'Sem categoria' },
+  ...store.categorias
+    .filter((c) => c.ativo || c.id === form.value?.categoria_id)
+    .map((c) => ({ value: c.id, label: c.nome + (c.ativo ? '' : ' (desativada)') }))
 ])
 const calc = computed(() => store.preco(form.value.custo, form.value.fornecedor_id, form.value.margem))
 const textoST = computed(() => {

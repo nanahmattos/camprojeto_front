@@ -13,15 +13,17 @@ export const useOficinaStore = defineStore('oficina', () => {
   // números ficam como texto no padrão brasileiro ("8,5"), igual ao que se digita nos campos
   const configCarregada = ref(false)
 
-  // tipos de cliente, fornecedores e tabelas de preço vêm com os desativados (ativo: false):
+  // tipos de cliente, fornecedores, tabelas de preço e categorias vêm com os desativados (ativo: false):
   // eles somem das listas de escolha, mas O.S e produtos antigos ainda mostram o nome
   const tiposCliente = ref([]) // { id, nome, taxa, ativo }
   const fornecedores = ref([]) // { id, nome, st, frete, desp, ativo }
   const tabelasPreco = ref([]) // { id, nome, preco, padrao, ativo }
+  const categorias = ref([]) // { id, nome, ativo }
 
   const tiposAtivos = computed(() => tiposCliente.value.filter((t) => t.ativo))
   const fornecedoresAtivos = computed(() => fornecedores.value.filter((f) => f.ativo))
   const tabelasAtivas = computed(() => tabelasPreco.value.filter((t) => t.ativo))
+  const categoriasAtivas = computed(() => categorias.value.filter((c) => c.ativo))
   const tabelaPadrao = computed(() => tabelasAtivas.value.find((t) => t.padrao) || tabelasAtivas.value[0] || null)
   const precoHoraPadrao = computed(() => (tabelaPadrao.value ? tabelaPadrao.value.preco : '0,00'))
 
@@ -50,6 +52,7 @@ export const useOficinaStore = defineStore('oficina', () => {
       desp: paraTexto(f.despesas_percent),
       ativo: f.ativo,
     }))
+    categorias.value = (d.categorias || []).map((c) => ({ id: c.id, nome: c.nome, ativo: c.ativo }))
     configCarregada.value = true
   }
 
@@ -75,6 +78,7 @@ export const useOficinaStore = defineStore('oficina', () => {
         frete_percent: num(f.frete),
         despesas_percent: num(f.desp),
       })),
+      categorias: c.categorias.map((cat) => ({ id: cat.id || null, nome: cat.nome })),
     })
     aplicarConfiguracoes(data)
   }
@@ -188,7 +192,7 @@ export const useOficinaStore = defineStore('oficina', () => {
       veiculo: '',
       placa: '',
       status: 'Em aberto',
-      pecas: [{ nome: '', codigo: '', qtd: '1', unit: '', est: null }],
+      pecas: [{ nome: '', codigo: '', unidade: 'UN', qtd: '1', unit: '', est: null }],
       servicos: [servico('', '')],
       obsAnalise: '',
       obsInterna: '',
@@ -208,6 +212,8 @@ export const useOficinaStore = defineStore('oficina', () => {
     fornecedoresAtivos,
     tabelasPreco,
     tabelasAtivas,
+    categorias,
+    categoriasAtivas,
     tabelaPadrao,
     tabelaPreco,
     autoPadrao,

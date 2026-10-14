@@ -114,10 +114,11 @@
           <q-btn outline no-caps color="grey-8" icon="add" label="Adicionar peça" @click="adicionarPeca" />
         </div>
         <div class="rolagem-x">
-          <div :style="{ minWidth: mostrarTaxa ? '1000px' : '860px' }">
+          <div :style="{ minWidth: mostrarTaxa ? '1080px' : '940px' }">
             <div class="grade grade-cabecalho" :style="{ gridTemplateColumns: colunasPecas }">
               <span class="rotulo-coluna">Nome do produto</span>
               <span class="rotulo-coluna">Código</span>
+              <span class="rotulo-coluna">Un.</span>
               <span class="rotulo-coluna text-right">Qtd</span>
               <span class="rotulo-coluna text-right">Valor unit.</span>
               <span class="rotulo-coluna text-right">Valor total</span>
@@ -131,8 +132,42 @@
               class="grade q-py-xs"
               :style="{ gridTemplateColumns: colunasPecas }"
             >
-              <q-input v-model="p.nome" placeholder="Nome do produto" aria-label="Nome do produto" outlined dense />
+              <q-input
+                :model-value="p.nome"
+                placeholder="Nome do produto"
+                aria-label="Nome do produto"
+                autocomplete="off"
+                outlined
+                dense
+                @update:model-value="(texto) => digitarPeca(i, texto)"
+                @blur="fecharSugestoesPeca"
+              >
+                <q-menu
+                  :model-value="pecaComSugestoes === i"
+                  no-parent-event
+                  no-focus
+                  no-refocus
+                  fit
+                  :offset="[0, 4]"
+                  @update:model-value="(v) => !v && fecharSugestoesPeca()"
+                >
+                  <q-list dense style="min-width: 320px">
+                    <q-item v-for="prod in sugestoesPeca" :key="prod.id" clickable @mousedown.prevent @click="escolherProduto(i, prod)">
+                      <q-item-section>
+                        <q-item-label>{{ prod.nome }}</q-item-label>
+                        <q-item-label caption>
+                          <span class="text-mono">{{ prod.codigo }}</span>
+                          <span v-if="prod.marca"> · {{ prod.marca }}</span>
+                          · estoque {{ String(prod.qtd_atual ?? 0).replace('.', ',') }}
+                        </q-item-label>
+                      </q-item-section>
+                      <q-item-section side class="text-mono">{{ brl(prod.preco_venda) }}</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-input>
               <q-input v-model="p.codigo" placeholder="Código" aria-label="Código" outlined dense input-class="text-mono" />
+              <UnidadeSelect v-model="p.unidade" aria-label="Unidade" />
               <q-input v-model="p.qtd" aria-label="Quantidade" inputmode="decimal" outlined dense input-class="text-right text-mono" />
               <q-input v-model="p.unit" placeholder="0,00" aria-label="Valor unitário" inputmode="decimal" outlined dense input-class="text-right text-mono" />
               <q-input :model-value="dec(num(p.qtd) * num(p.unit))" aria-label="Valor total" readonly outlined dense bg-color="grey-2" input-class="text-right text-mono" />
@@ -466,8 +501,10 @@ import {
   atualizarServicoSalvo,
   apagarServicoSalvo
 } from '@/api/ordens'
+import { listarProdutos } from '@/api/produtos'
 import { num, brl, dec, pct } from '@/utils/formato'
 import ProdutoDialog from '@/components/ProdutoDialog.vue'
+import UnidadeSelect from '@/components/UnidadeSelect.vue'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
 
 const $q = useQuasar()
@@ -571,8 +608,8 @@ const textoTaxa = computed(() => '+' + pct(T.value.taxa))
 
 const colunasPecas = computed(() =>
   mostrarTaxa.value
-    ? 'minmax(220px, 2.4fr) 110px 80px 120px 120px 140px 104px 40px'
-    : 'minmax(220px, 2.4fr) 110px 80px 120px 120px 104px 40px'
+    ? 'minmax(220px, 2.4fr) 110px 80px 80px 120px 120px 140px 104px 40px'
+    : 'minmax(220px, 2.4fr) 110px 80px 80px 120px 120px 104px 40px'
 )
 const colunasServicos = computed(() =>
   mostrarTaxa.value
@@ -663,7 +700,48 @@ async function buscarPlaca() {
 
 // ---- peças
 function adicionarPeca() {
-  os.value.pecas.push({ nome: '', codigo: '', qtd: '1', unit: '', est: null })
+  os.value.pecas.push({ nome: '', codigo: '', unidade: 'UN', qtd: '1', unit: '', est: null })
+}
+
+// sugestões do estoque enquanto digita o nome; escolher uma liga a peça ao produto
+const sugestoesPeca = ref([])
+const pecaComSugestoes = ref(null)
+let buscaPecaTimer = null
+
+function digitarPeca(i, texto) {
+  const p = os.value.pecas[i]
+  p.nome = texto || ''
+  p.est = null
+  clearTimeout(buscaPecaTimer)
+  if (!texto || texto.trim().length < 2) {
+    pecaComSugestoes.value = null
+    return
+  }
+  buscaPecaTimer = setTimeout(async () => {
+    try {
+      const r = await listarProdutos({ busca: texto.trim(), ordenar: 'nome', direcao: 'asc', por_pagina: 10 })
+      sugestoesPeca.value = r.data
+      pecaComSugestoes.value = r.data.length ? i : null
+    } catch {
+      pecaComSugestoes.value = null
+    }
+  }, 300)
+}
+
+function fecharSugestoesPeca() {
+  clearTimeout(buscaPecaTimer)
+  pecaComSugestoes.value = null
+}
+
+function escolherProduto(i, produto) {
+  pecaComSugestoes.value = null
+  Object.assign(os.value.pecas[i], {
+    nome: produto.nome,
+    codigo: produto.codigo,
+    unidade: produto.unidade || 'UN',
+    unit: dec(produto.preco_venda),
+    est: produto.id
+  })
 }
 
 function abrirEstoque(i) {
@@ -671,7 +749,7 @@ function abrirEstoque(i) {
   // senão abre um produto novo já com o nome e o código digitados
   const p = os.value.pecas[i]
   produtoDialog.id = p.est || null
-  produtoDialog.inicial = { nome: p.nome, codigo: p.codigo }
+  produtoDialog.inicial = { nome: p.nome, codigo: p.codigo, unidade: p.unidade || 'UN' }
   produtoDialog.peca = i
   produtoDialog.aberto = true
 }
@@ -680,6 +758,7 @@ function produtoSalvo(produto) {
   Object.assign(os.value.pecas[produtoDialog.peca], {
     nome: produto.nome,
     codigo: produto.codigo,
+    unidade: produto.unidade || 'UN',
     unit: dec(produto.preco_venda),
     est: produto.id
   })
