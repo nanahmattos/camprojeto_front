@@ -3,7 +3,7 @@ import { num, dec, paraTexto } from '@/utils/formato'
 
 // a API grava códigos sem acento; a tela mostra os nomes
 export const STATUS_API = { em_aberto: 'Em aberto', finalizado: 'Finalizado', pendente: 'Pendente', nao_aprovado: 'Não aprovado' }
-export const FORMAS_API = { pix: 'PIX', dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito', pendente: 'Pendente' }
+export const FORMAS_API = { pix: 'PIX', dinheiro: 'Dinheiro', debito: 'Débito', credito: 'Crédito', boleto: 'Boleto', pendente: 'Pendente' }
 
 const codigo = (mapa, rotulo) => Object.keys(mapa).find((k) => mapa[k] === rotulo)
 

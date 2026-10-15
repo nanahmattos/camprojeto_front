@@ -33,11 +33,26 @@
           </div>
 
           <q-list>
-            <EssentialLink
-              v-for="link in linksList"
-              :key="link.label"
-              v-bind="link"
-            />
+            <template v-for="link in linksList" :key="link.label">
+              <!-- item com submenu: abre sozinho quando a página atual é de dentro dele -->
+              <q-expansion-item
+                v-if="link.children"
+                :default-opened="link.children.some((c) => route.path.startsWith(c.route))"
+                :icon="link.icon"
+                :label="link.label"
+                header-class="menu-item"
+                expand-icon-class="text-grey-5"
+                dense-toggle
+              >
+                <EssentialLink
+                  v-for="filho in link.children"
+                  :key="filho.label"
+                  v-bind="filho"
+                  class="q-pl-lg"
+                />
+              </q-expansion-item>
+              <EssentialLink v-else v-bind="link" />
+            </template>
           </q-list>
         </nav>
 
@@ -73,7 +88,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { mensagemDeErro } from '@/boot/axios'
 import EssentialLink from '@/components/EssentialLink.vue'
@@ -83,6 +98,7 @@ import { useAuthStore } from '@/stores/auth'
 const store = useOficinaStore()
 const auth = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 const $q = useQuasar()
 
 // taxas, margens e fornecedores entram no cálculo de preço de todas as telas
@@ -123,6 +139,14 @@ const linksList = computed(() => [
     route: '/estoque',
     badge: store.qtdRepor || '',
     badgeLabel: store.qtdRepor + ' produtos para repor'
+  },
+  {
+    label: 'Financeiro',
+    icon: 'account_balance_wallet',
+    children: [
+      { label: 'Notas Entrada', icon: 'receipt_long', route: '/financeiro/notas-entrada' },
+      { label: 'Gastos Fixos', icon: 'event_repeat', route: '/financeiro/gastos-fixos' }
+    ]
   },
   {
     label: 'Configurações',

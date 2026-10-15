@@ -6,7 +6,7 @@ import { num, dec, addMonths, hojeIso, paraTexto } from '@/utils/formato'
 
 export const STATUS = ['Em aberto', 'Finalizado', 'Pendente', 'Não aprovado']
 
-export const FORMAS_PAGAMENTO = ['PIX', 'Dinheiro', 'Débito', 'Crédito', 'Pendente']
+export const FORMAS_PAGAMENTO = ['PIX', 'Dinheiro', 'Débito', 'Crédito', 'Boleto', 'Pendente']
 
 export const useOficinaStore = defineStore('oficina', () => {
   // ---- configurações (vêm da API: GET /api/configuracoes)
