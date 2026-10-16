@@ -212,7 +212,7 @@
           <div
             v-show="salvosAbertos"
             class="column q-gutter-y-sm q-pa-md"
-            style="border: 1px solid #e9c9ae; background: #fdf8f3; border-radius: 8px"
+            style="border: 1px solid #c5dcb5; background: #f2f7ee; border-radius: 8px"
           >
             <div class="row items-baseline q-gutter-x-sm">
               <strong style="font-size: 14px">Pré-salvos para {{ os.veiculo || '[veículo]' }} · {{ os.placa || '[placa]' }}</strong>

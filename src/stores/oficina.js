@@ -16,7 +16,7 @@ export const useOficinaStore = defineStore('oficina', () => {
   // tipos de cliente, fornecedores, tabelas de preço e categorias vêm com os desativados (ativo: false):
   // eles somem das listas de escolha, mas O.S e produtos antigos ainda mostram o nome
   const tiposCliente = ref([]) // { id, nome, taxa, ativo }
-  const fornecedores = ref([]) // { id, nome, st, frete, desp, ativo }
+  const fornecedores = ref([]) // { id, nome, icms, mva, stRecolhido, ipi, ativo }
   const tabelasPreco = ref([]) // { id, nome, preco, padrao, ativo }
   const categorias = ref([]) // { id, nome, ativo }
 
@@ -47,9 +47,10 @@ export const useOficinaStore = defineStore('oficina', () => {
     fornecedores.value = d.fornecedores.map((f) => ({
       id: f.id,
       nome: f.nome,
-      st: paraTexto(f.st_percent),
-      frete: paraTexto(f.frete_percent),
-      desp: paraTexto(f.despesas_percent),
+      icms: paraTexto(f.icms_percent),
+      mva: paraTexto(f.mva_percent),
+      stRecolhido: f.st_recolhido,
+      ipi: paraTexto(f.ipi_percent ?? 0),
       ativo: f.ativo,
     }))
     categorias.value = (d.categorias || []).map((c) => ({ id: c.id, nome: c.nome, ativo: c.ativo }))
@@ -74,9 +75,10 @@ export const useOficinaStore = defineStore('oficina', () => {
       fornecedores: c.fornecedores.map((f) => ({
         id: f.id || null,
         nome: f.nome,
-        st_percent: num(f.st),
-        frete_percent: num(f.frete),
-        despesas_percent: num(f.desp),
+        icms_percent: num(f.icms),
+        mva_percent: num(f.mva),
+        st_recolhido: !!f.stRecolhido,
+        ipi_percent: num(f.ipi),
       })),
       categorias: c.categorias.map((cat) => ({ id: cat.id || null, nome: cat.nome })),
     })
@@ -122,21 +124,29 @@ export const useOficinaStore = defineStore('oficina', () => {
   }
 
   function fornecedor(id) {
-    return fornecedores.value.find((x) => x.id === id) || { id: null, nome: '', st: '0', frete: '0', desp: '0' }
+    return fornecedores.value.find((x) => x.id === id) || { id: null, nome: '', icms: '0', mva: '0', stRecolhido: true, ipi: '0' }
+  }
+
+  // ST em % da base do ICMS: (1 + MVA) × alíquota de ICMS; já recolhido = 0
+  function stPercent(f) {
+    return f.stRecolhido ? 0 : (1 + num(f.mva) / 100) * num(f.icms)
   }
 
   // prévia enquanto se digita; o preço que vale é o calculado pela API (app/Services/Precificacao.php)
-  // custo + encargos do fornecedor + margem da faixa (ou a margem digitada)
-  function preco(custoTexto, fornecedorId, margemTexto) {
+  // custo efetivo = custo + IPI + ST, × markup da faixa (ou o digitado). Igual a Fornecedor::encargos na API:
+  // IPI = custo × alíquota; ST = (base do ICMS + IPI) × (1 + MVA) × ICMS; base vazia = o custo
+  function preco(custoTexto, fornecedorId, margemTexto, baseTexto = '') {
     const custo = num(custoTexto)
     const f = fornecedor(fornecedorId)
-    const encargos = num(f.st) + num(f.frete) + num(f.desp)
-    const efetivo = custo * (1 + encargos / 100)
+    const base = baseTexto === '' || baseTexto === null || baseTexto === undefined ? custo : num(baseTexto)
+    const ipi = (custo * num(f.ipi)) / 100
+    const st = ((base + ipi) * stPercent(f)) / 100
+    const efetivo = custo + ipi + st
     const fi = faixaIndice(custo)
     const sugerida = fi < 0 ? 0 : num(faixas.value[fi].margem)
     const semMargem = margemTexto === '' || margemTexto === null || margemTexto === undefined
     const margem = semMargem ? sugerida : num(margemTexto)
-    return { custo, fornecedor: f, encargos, efetivo, faixa: fi, sugerida, margem, venda: efetivo * (1 + margem / 100) }
+    return { custo, fornecedor: f, base, ipi, st, efetivo, faixa: fi, sugerida, margem, venda: efetivo * (1 + margem / 100) }
   }
 
   // ---- ordens de serviço
@@ -226,6 +236,7 @@ export const useOficinaStore = defineStore('oficina', () => {
     carregarResumoEstoque,
     faixaTexto,
     preco,
+    stPercent,
     taxaDoTipo,
     totais,
     gerarParcelas,

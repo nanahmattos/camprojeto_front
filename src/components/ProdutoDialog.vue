@@ -66,7 +66,7 @@
               outlined
               dense
               bg-color="white"
-              class="col-12 col-sm-6 col-md-4"
+              class="col-12 col-sm-6 col-md-3"
             />
             <q-input
               v-model="form.custo"
@@ -77,20 +77,46 @@
               dense
               bg-color="white"
               input-class="text-right text-mono"
-              class="col-12 col-sm-6 col-md-3"
+              class="col-6 col-sm-3 col-md-2"
             />
-            <div class="col-12 col-md-5">
-              <div class="rotulo-coluna q-mb-xs">Encargos do fornecedor</div>
+            <q-input
+              v-if="!calc.fornecedor.stRecolhido"
+              v-model="form.base_icms"
+              label="Base cálc. ICMS (R$)"
+              :placeholder="form.custo || '0,00'"
+              inputmode="decimal"
+              outlined
+              dense
+              bg-color="white"
+              input-class="text-right text-mono"
+              class="col-6 col-sm-3 col-md-2"
+            >
+              <q-tooltip>Da nota fiscal (coluna "Base calc. ICMS"). Vazio = o preço de custo.</q-tooltip>
+            </q-input>
+            <div class="col-12 col-md">
+              <div class="rotulo-coluna q-mb-xs">ICMS / ST do fornecedor</div>
               <div class="row q-gutter-xs">
-                <q-chip dense square color="grey-3" text-color="grey-9">{{ textoST }}</q-chip>
-                <q-chip dense square color="grey-3" text-color="grey-9">Frete {{ pct(num(calc.fornecedor.frete)) }}</q-chip>
-                <q-chip dense square color="grey-3" text-color="grey-9">Despesas {{ pct(num(calc.fornecedor.desp)) }}</q-chip>
+                <template v-if="calc.fornecedor.stRecolhido">
+                  <q-chip dense square color="grey-3" text-color="grey-9">ST já recolhido</q-chip>
+                </template>
+                <template v-else>
+                  <q-chip dense square color="grey-3" text-color="grey-9">ICMS {{ pct(num(calc.fornecedor.icms)) }}</q-chip>
+                  <q-chip dense square color="grey-3" text-color="grey-9">MVA {{ pct(num(calc.fornecedor.mva)) }}</q-chip>
+                </template>
+                <q-chip v-if="num(calc.fornecedor.ipi) > 0" dense square color="grey-3" text-color="grey-9">IPI {{ pct(num(calc.fornecedor.ipi)) }}</q-chip>
               </div>
             </div>
           </div>
 
           <div class="row justify-between q-py-sm" style="border-top: 1px dashed #cfcbc3; border-bottom: 1px dashed #cfcbc3; font-size: 14px">
-            <span class="text-grey-8">Custo efetivo (custo + {{ pct(calc.encargos) }} de encargos)</span>
+            <span class="text-grey-8">
+              Custo efetivo = custo {{ brl(calc.custo) }}
+              <template v-if="calc.ipi > 0"> + IPI {{ brl(calc.ipi) }}</template>
+              <template v-if="!calc.fornecedor.stRecolhido">
+                + ST {{ brl(calc.st) }}
+                <span style="font-size: 12px">(base {{ brl(calc.base) }}{{ calc.ipi > 0 ? ' + IPI' : '' }} × {{ markupTexto(num(calc.fornecedor.mva)) }} × {{ pct(num(calc.fornecedor.icms)) }})</span>
+              </template>
+            </span>
             <strong class="text-mono">{{ brl(calc.efetivo) }}</strong>
           </div>
 
@@ -103,20 +129,21 @@
 
           <div v-if="form.auto !== false" class="row q-col-gutter-sm items-center">
             <q-input
-              :model-value="margemExibida"
-              label="Margem de lucro (%)"
+              :model-value="markupExibido"
+              label="Markup"
+              suffix="x"
               inputmode="decimal"
               outlined
               dense
               bg-color="white"
               input-class="text-right text-mono"
               class="col-12 col-sm-4 col-md-3"
-              @update:model-value="(v) => (form.margem = v)"
+              @update:model-value="digitarMarkup"
             />
             <div class="col-12 col-sm-8 col-md-5 column" style="font-size: 13px">
               <span class="text-grey-8">
                 Faixa: <strong class="text-dark">{{ store.faixaTexto(calc.faixa) }}</strong> · sugestão
-                {{ String(calc.sugerida).replace('.', ',') }}%
+                {{ markupTexto(calc.sugerida) }}x
               </span>
               <q-btn
                 v-if="margemEditada"
@@ -126,8 +153,8 @@
                 color="primary"
                 class="self-start q-px-none"
                 style="text-decoration: underline"
-                label="Voltar para a margem sugerida"
-                @click="form.margem = ''"
+                label="Voltar para o markup sugerido"
+                @click="digitarMarkup('')"
               />
             </div>
             <q-input
@@ -155,8 +182,8 @@
               class="col-12 col-sm-5 col-md-4"
             />
             <span class="col-12 col-sm-7 col-md-8 text-grey-8" style="font-size: 13px">
-              Preço digitado à mão. Margem resultante:
-              <strong class="text-mono text-dark">{{ margemReal }}</strong>
+              Preço digitado à mão. Markup resultante:
+              <strong class="text-mono text-dark">{{ markupReal }}</strong>
             </span>
           </div>
 
@@ -214,7 +241,7 @@ import { ref, computed } from 'vue'
 import { useOficinaStore } from '@/stores/oficina'
 import { mensagemDeErro } from '@/boot/axios'
 import { obterProduto, salvarProduto, listarMovimentacoes, paraForm, formNovo } from '@/api/produtos'
-import { num, brl, dec, pct } from '@/utils/formato'
+import { num, brl, dec, pct, markupTexto, margemDoMarkup, paraTexto } from '@/utils/formato'
 import UnidadeSelect from '@/components/UnidadeSelect.vue'
 
 const props = defineProps({
@@ -238,6 +265,7 @@ const salvando = ref(false)
 
 async function carregar() {
   form.value = null
+  markupDigitado.value = ''
   erro.value = ''
   movimentacoes.value = []
   // fornecedores, faixas e "preço automático por padrão" vêm das configurações:
@@ -284,19 +312,20 @@ const opcoesCategoria = computed(() => [
     .filter((c) => c.ativo || c.id === form.value?.categoria_id)
     .map((c) => ({ value: c.id, label: c.nome + (c.ativo ? '' : ' (desativada)') }))
 ])
-const calc = computed(() => store.preco(form.value.custo, form.value.fornecedor_id, form.value.margem))
-const textoST = computed(() => {
-  const st = num(calc.value.fornecedor.st)
-  return st === 0 ? 'Sem ST retido' : 'ST ' + pct(st)
-})
+const calc = computed(() => store.preco(form.value.custo, form.value.fornecedor_id, form.value.margem, form.value.base_icms))
 const margemEditada = computed(() => !['', null, undefined].includes(form.value.margem))
-const margemExibida = computed(() =>
-  margemEditada.value ? form.value.margem : String(calc.value.sugerida).replace('.', ',')
+// o campo mostra markup (2,30x); o form e a API guardam margem em %.
+// o texto digitado fica guardado à parte para não ser reescrito enquanto se digita ("2," viraria "2,00")
+const markupDigitado = ref('')
+const markupExibido = computed(() =>
+  margemEditada.value ? markupDigitado.value || markupTexto(num(form.value.margem)) : markupTexto(calc.value.sugerida)
 )
+function digitarMarkup(v) {
+  markupDigitado.value = v || ''
+  form.value.margem = v === '' || v === null || v === undefined ? '' : paraTexto(margemDoMarkup(num(v)))
+}
 const vendaFinal = computed(() => (form.value.auto === false ? num(form.value.venda) : calc.value.venda))
-const margemReal = computed(() =>
-  calc.value.efetivo > 0 ? pct((vendaFinal.value / calc.value.efetivo - 1) * 100) : '—'
-)
+const markupReal = computed(() => (calc.value.efetivo > 0 ? dec(vendaFinal.value / calc.value.efetivo) + 'x' : '—'))
 const abaixoDoMinimo = computed(() => form.value.min !== '' && num(form.value.qtd) <= num(form.value.min))
 
 const diferenca = computed(() => (qtdOriginal.value === null ? 0 : num(form.value.qtd) - qtdOriginal.value))
@@ -320,6 +349,10 @@ function sinalQtd(m) {
 
 async function salvar() {
   erro.value = ''
+  if (form.value.auto !== false && margemEditada.value && num(form.value.margem) < 0) {
+    erro.value = 'O markup precisa ser 1,00x ou mais (abaixo disso a venda fica menor que o custo).'
+    return
+  }
   salvando.value = true
   try {
     const produto = await salvarProduto(props.produtoId, form.value)

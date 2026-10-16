@@ -3,7 +3,7 @@
     <div class="pagina" :style="{ paddingBottom: alterado ? '88px' : '0' }">
       <div>
         <h1 class="titulo-pagina">Configurações</h1>
-        <p class="subtitulo-pagina">Taxas por tipo de cliente, margens de lucro, encargos de fornecedor e categorias do estoque</p>
+        <p class="subtitulo-pagina">Taxas por tipo de cliente, markup, ICMS/ST de fornecedor e categorias do estoque</p>
       </div>
 
       <q-banner v-if="!podeEditar" dense rounded class="bg-grey-3 text-grey-9">
@@ -176,11 +176,14 @@
             <section class="cartao q-pa-md column q-gutter-y-sm" aria-label="Preços e margens">
               <h2 class="titulo-secao">Sugestão automática de preço</h2>
               <q-checkbox v-model="form.autoPadrao" label="Ligada por padrão em produtos novos" :disable="!podeEditar" />
-              <p class="texto-apoio">Margem aplicada pelo custo da peça. Pode ser trocada em cada produto.</p>
+              <p class="texto-apoio">
+                Markup pela faixa de custo da peça: o custo efetivo (custo + ST do fornecedor, quando não vem recolhido) é multiplicado por ele.
+                Ex.: custo R$ 100,00 com markup 2,30x = venda R$ 230,00. Pode ser trocado em cada produto.
+              </p>
               <div class="grade grade-cabecalho" style="grid-template-columns: minmax(0, 1fr) 140px 120px">
                 <span class="rotulo-coluna">De</span>
                 <span class="rotulo-coluna">Até (R$)</span>
-                <span class="rotulo-coluna">Margem</span>
+                <span class="rotulo-coluna">Markup</span>
               </div>
               <div
                 v-for="(f, i) in form.faixas"
@@ -203,10 +206,11 @@
                   input-class="text-right text-mono"
                 />
                 <q-input
-                  v-model="f.margem"
-                  aria-label="Margem em porcentagem"
+                  v-model="f.markup"
+                  aria-label="Markup (multiplicador sobre o custo)"
+                  placeholder="2,30"
                   inputmode="decimal"
-                  suffix="%"
+                  suffix="x"
                   outlined
                   dense
                   :readonly="!podeEditar"
@@ -220,7 +224,7 @@
 
         <section class="cartao q-pa-md column q-gutter-y-sm" aria-label="Fornecedores">
           <div class="row items-center justify-between">
-            <h2 class="titulo-secao">Fornecedores e encargos</h2>
+            <h2 class="titulo-secao">Fornecedores e ICMS / ST</h2>
             <q-btn
               v-if="podeEditar"
               outline
@@ -232,8 +236,10 @@
             />
           </div>
           <p class="texto-apoio">
-            Somados ao preço de custo antes da margem. ST em 0% = fornecedor sem ST retido. Excluir tira o fornecedor da
-            lista; produtos que já usam ele continuam com o nome e o preço.
+            Custo efetivo = custo + IPI + ST, antes do markup. IPI = custo × alíquota de IPI. Quando o ST não vem recolhido:
+            ST = (base de cálculo do ICMS + IPI) × (1 + MVA) × alíquota de ICMS. A base vem da nota e é digitada no produto
+            (vazia = o custo). Ex.: base R$ 37,39, ICMS 17%, MVA 50% → ST R$ 9,53.
+            Excluir tira o fornecedor da lista; produtos que já usam ele continuam com o nome e o preço.
           </p>
 
           <p v-if="!form.fornecedores.length" class="texto-apoio q-py-md text-center">
@@ -244,11 +250,11 @@
             <div style="min-width: 800px" class="column q-gutter-y-xs">
               <div class="grade grade-cabecalho" :style="{ gridTemplateColumns: colunasFornecedor }">
                 <span class="rotulo-coluna">Fornecedor</span>
-                <span class="rotulo-coluna">ST %</span>
-                <span class="rotulo-coluna">Frete %</span>
-                <span class="rotulo-coluna">Despesas %</span>
-                <span class="rotulo-coluna text-right">Encargos</span>
-                <span></span>
+                <span class="rotulo-coluna">Aliq. ICMS</span>
+                <span class="rotulo-coluna">MVA</span>
+                <span class="rotulo-coluna">ST já recolhido?</span>
+                <span class="rotulo-coluna">Aliq. IPI</span>
+                <span class="rotulo-coluna text-right">ST sobre a base</span>
                 <span></span>
               </div>
               <div
@@ -266,16 +272,55 @@
                   :readonly="!podeEditar"
                   :autofocus="!f.id && i === form.fornecedores.length - 1"
                 />
-                <q-input v-model="f.st" aria-label="ST" inputmode="decimal" outlined dense :readonly="!podeEditar" input-class="text-right text-mono" />
-                <q-input v-model="f.frete" aria-label="Frete" inputmode="decimal" outlined dense :readonly="!podeEditar" input-class="text-right text-mono" />
-                <q-input v-model="f.desp" aria-label="Despesas" inputmode="decimal" outlined dense :readonly="!podeEditar" input-class="text-right text-mono" />
+                <q-input
+                  v-model="f.icms"
+                  :aria-label="'Alíquota de ICMS de ' + (f.nome || 'novo fornecedor')"
+                  inputmode="decimal"
+                  suffix="%"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  input-class="text-right text-mono"
+                />
+                <q-input
+                  v-model="f.mva"
+                  :aria-label="'MVA de ' + (f.nome || 'novo fornecedor')"
+                  inputmode="decimal"
+                  suffix="%"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  input-class="text-right text-mono"
+                />
+                <q-btn-toggle
+                  v-model="f.stRecolhido"
+                  :options="[
+                    { label: 'Sim', value: true },
+                    { label: 'Não', value: false }
+                  ]"
+                  :disable="!podeEditar"
+                  no-caps
+                  unelevated
+                  dense
+                  toggle-color="dark"
+                  color="grey-3"
+                  text-color="grey-9"
+                  class="self-center"
+                  :aria-label="'ST já recolhido? ' + (f.nome || 'novo fornecedor')"
+                />
+                <q-input
+                  v-model="f.ipi"
+                  :aria-label="'Alíquota de IPI de ' + (f.nome || 'novo fornecedor')"
+                  inputmode="decimal"
+                  suffix="%"
+                  outlined
+                  dense
+                  :readonly="!podeEditar"
+                  input-class="text-right text-mono"
+                />
                 <span class="text-mono text-weight-bold text-right" style="font-size: 14px">
-                  +{{ pct(num(f.st) + num(f.frete) + num(f.desp)) }}
-                </span>
-                <span>
-                  <q-chip v-if="num(f.st) === 0" dense color="grey-3" text-color="grey-9" class="text-weight-bold">
-                    Sem ST retido
-                  </q-chip>
+                  <template v-if="f.stRecolhido"><span class="text-grey-7 text-weight-regular">já recolhido</span></template>
+                  <template v-else>+{{ pct(store.stPercent(f)) }}</template>
                 </span>
                 <q-btn
                   v-if="podeEditar"
@@ -313,13 +358,13 @@ import { useQuasar } from 'quasar'
 import { useOficinaStore } from '@/stores/oficina'
 import { useAuthStore } from '@/stores/auth'
 import { mensagemDeErro } from '@/boot/axios'
-import { num, brl, pct } from '@/utils/formato'
+import { num, brl, pct, markupTexto, margemDoMarkup, paraTexto } from '@/utils/formato'
 
 const $q = useQuasar()
 const store = useOficinaStore()
 const auth = useAuthStore()
 
-const colunasFornecedor = 'minmax(200px, 1fr) 110px 110px 110px 110px 140px 40px'
+const colunasFornecedor = 'minmax(200px, 1fr) 110px 110px 120px 110px 130px 40px'
 
 const podeEditar = computed(() => auth.usuario?.papel === 'admin')
 
@@ -334,7 +379,8 @@ function copiaDoStore() {
       // só os ativos: o que for excluído aqui some da lista enviada e a API desativa
       tiposCliente: store.tiposAtivos,
       tabelasPreco: store.tabelasAtivas,
-      faixas: store.faixas,
+      // a tela edita markup (2,30x); o store e a API guardam margem em %
+      faixas: store.faixas.map((f) => ({ ate: f.ate, markup: markupTexto(num(f.margem)) })),
       fornecedores: store.fornecedoresAtivos,
       categorias: store.categoriasAtivas
     })
@@ -391,13 +437,20 @@ function adicionarCategoria() {
 }
 
 function adicionarFornecedor() {
-  form.value.fornecedores.push({ id: null, nome: '', st: '0', frete: '0', desp: '0', ativo: true })
+  form.value.fornecedores.push({ id: null, nome: '', icms: '0', mva: '0', stRecolhido: true, ipi: '0', ativo: true })
 }
 
 async function salvar() {
+  if (form.value.faixas.some((f) => f.markup === '' || num(f.markup) < 1)) {
+    $q.notify({ message: 'O markup precisa ser 1,00x ou mais (abaixo disso a venda fica menor que o custo).', color: 'negative', position: 'top' })
+    return
+  }
   salvando.value = true
   try {
-    await store.salvarConfiguracoes(form.value)
+    await store.salvarConfiguracoes({
+      ...form.value,
+      faixas: form.value.faixas.map((f) => ({ ate: f.ate, margem: paraTexto(margemDoMarkup(num(f.markup))) }))
+    })
     descartar()
     $q.notify({ message: 'Configurações salvas.', color: 'positive', icon: 'check', position: 'top' })
   } catch (e) {

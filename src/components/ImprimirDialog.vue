@@ -12,7 +12,7 @@
       <q-separator />
 
       <q-card-section class="column q-gutter-y-sm" role="radiogroup" aria-label="Tipo de impressão">
-        <q-banner v-if="aviso" dense rounded class="bg-orange-1 text-brown-9 q-mb-sm">
+        <q-banner v-if="aviso" dense rounded class="bg-amber-1 text-brown-9 q-mb-sm">
           <template #avatar><q-icon name="info_outline" /></template>
           {{ aviso }}
         </q-banner>
@@ -22,8 +22,8 @@
           class="row no-wrap items-start q-gutter-x-sm q-pa-md cursor-pointer"
           :style="{
             borderRadius: '8px',
-            border: '2px solid ' + (tipo === op.value ? '#B4500F' : '#DAD8D2'),
-            background: tipo === op.value ? '#FDF8F3' : '#FFFFFF'
+            border: '2px solid ' + (tipo === op.value ? '#2E6B30' : '#DAD8D2'),
+            background: tipo === op.value ? '#F2F7EE' : '#FFFFFF'
           }"
         >
           <q-radio v-model="tipo" :val="op.value" dense />
@@ -85,7 +85,7 @@ const opcoes = [
   {
     value: 'custo',
     titulo: 'Análise de preço de custo',
-    desc: 'Preço pago, fornecedor, encargos (ST, frete, despesas), margem e dados de estoque. Uso interno.'
+    desc: 'Preço pago, fornecedor, ICMS / MVA, markup e dados de estoque. Uso interno.'
   },
   {
     value: 'cliente',
@@ -101,7 +101,7 @@ const colunas = computed(() => {
     tecnico:
       'Cabeçalho (cliente, veículo, placa) · Peças: produto, código, qtd · Serviços: descrição, horas · Observações pós análise',
     custo:
-      'Peças: produto, código, qtd, preço de custo, fornecedor, ST/frete/despesas, custo efetivo, margem, venda, estoque atual / mínimo · Serviços com valores · Observações internas',
+      'Peças: produto, código, qtd, preço de custo, fornecedor, ICMS / MVA, custo efetivo, markup, venda, estoque atual / mínimo · Serviços com valores · Observações internas',
     cliente:
       'Cabeçalho · Peças: produto, código, qtd, valor unit., total' +
       colTaxa +

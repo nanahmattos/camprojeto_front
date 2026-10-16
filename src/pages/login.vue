@@ -19,7 +19,7 @@
             </li>
             <li>
               <q-icon name="tune" size="22px" />
-              <span>Preço de venda pela margem de cada faixa e taxas por tipo de cliente</span>
+              <span>Preço de venda pelo markup de cada faixa e taxas por tipo de cliente</span>
             </li>
           </ul>
 
@@ -186,7 +186,7 @@ async function entrar() {
   }
 
   .q-icon {
-    color: #e07a35;
+    color: #8dbf3f;
     margin-top: 1px;
   }
 }

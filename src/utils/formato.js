@@ -47,6 +47,15 @@ export function addMonths(iso, k) {
   )
 }
 
+// a API guarda margem em %; a tela mostra markup (multiplicador sobre o custo): 150% = 2,50x
+export function markupTexto(margemPercent) {
+  return dec(1 + margemPercent / 100)
+}
+
+export function margemDoMarkup(markup) {
+  return Math.round((markup - 1) * 10000) / 100
+}
+
 // número vindo da API -> texto no padrão dos campos ("8,5"); null vira ""
 export function paraTexto(v) {
   if (v === null || v === undefined) return ''
