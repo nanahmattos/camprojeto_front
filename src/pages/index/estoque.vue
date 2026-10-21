@@ -82,13 +82,13 @@
         </template>
 
         <template #body-cell-qtd_atual="props">
-          <q-td :props="props" class="text-mono" :class="props.row.abaixo_minimo ? 'text-negative text-weight-bold' : ''">
+          <q-td :props="props"  :class="props.row.abaixo_minimo ? 'text-negative text-weight-bold' : ''">
             {{ props.value }}
           </q-td>
         </template>
 
         <template #body-cell-preco_venda="props">
-          <q-td :props="props" class="text-mono text-weight-bold">{{ props.value }}</q-td>
+          <q-td :props="props" class=" text-weight-bold">{{ props.value }}</q-td>
         </template>
 
         <template #body-cell-acoes="props">
@@ -150,19 +150,19 @@ const opcoesCategoria = computed(() => [
   ...store.categoriasAtivas.map((c) => ({ value: c.id, label: c.nome }))
 ])
 
-const mono = 'text-mono'
+//nst mono = 'text-mono'
 const qtd = (v) => (v === null ? '—' : String(v).replace('.', ','))
 const colunas = [
   { name: 'nome', label: 'Produto', field: 'nome', align: 'left', sortable: true },
-  { name: 'codigo', label: 'Código', field: 'codigo', align: 'left', classes: mono, sortable: true },
-  { name: 'categoria', label: 'Categoria', field: (p) => p.categoria_nome || '—', align: 'left' },
+  // { name: 'codigo', label: 'Código', field: 'codigo', align: 'left', classes: mono, sortable: true },
+  // { name: 'categoria', label: 'Categoria', field: (p) => p.categoria_nome || '—', align: 'left' },
   { name: 'marca', label: 'Marca', field: (p) => p.marca || '—', align: 'left' },
-  { name: 'ncm', label: 'NCM', field: (p) => p.ncm || '—', align: 'left', classes: mono },
+  // { name: 'ncm', label: 'NCM', field: (p) => p.ncm || '—', align: 'left', classes: mono },
   { name: 'qtd_atual', label: 'Qtd', field: 'qtd_atual', format: qtd, align: 'right', sortable: true },
-  { name: 'unidade', label: 'Un.', field: (p) => p.unidade || '—', align: 'left', classes: mono + ' text-grey-8' },
-  { name: 'qtd_min', label: 'Mín', field: 'qtd_min', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
-  { name: 'qtd_max', label: 'Máx', field: 'qtd_max', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
-  { name: 'custo', label: 'Custo', field: 'custo', format: brl, align: 'right', classes: mono, sortable: true },
+  // { name: 'unidade', label: 'Un.', field: (p) => p.unidade || '—', align: 'left', classes: mono + ' text-grey-8' },
+  // { name: 'qtd_min', label: 'Mín', field: 'qtd_min', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
+  // { name: 'qtd_max', label: 'Máx', field: 'qtd_max', format: qtd, align: 'right', classes: mono + ' text-grey-8' },
+  // { name: 'custo', label: 'Custo', field: 'custo', format: brl, align: 'right', classes: mono, sortable: true },
   { name: 'fornecedor', label: 'Fornecedor', field: (p) => p.fornecedor_nome || '—', align: 'left' },
   { name: 'preco_venda', label: 'Venda', field: 'preco_venda', format: brl, align: 'right', sortable: true },
   { name: 'atualizado_em', label: 'Alterado', field: 'atualizado_em', align: 'left', classes: 'text-grey-8', sortable: true },

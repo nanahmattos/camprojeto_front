@@ -127,26 +127,29 @@ export const useOficinaStore = defineStore('oficina', () => {
     return fornecedores.value.find((x) => x.id === id) || { id: null, nome: '', icms: '0', mva: '0', stRecolhido: true, ipi: '0' }
   }
 
-  // ST em % da base do ICMS: (1 + MVA) × alíquota de ICMS; já recolhido = 0
+  // ST em % do custo (sem IPI): (1 + MVA) × ICMS − ICMS próprio = MVA × ICMS; já recolhido = 0
   function stPercent(f) {
-    return f.stRecolhido ? 0 : (1 + num(f.mva) / 100) * num(f.icms)
+    return f.stRecolhido ? 0 : (num(f.mva) * num(f.icms)) / 100
   }
 
   // prévia enquanto se digita; o preço que vale é o calculado pela API (app/Services/Precificacao.php)
   // custo efetivo = custo + IPI + ST, × markup da faixa (ou o digitado). Igual a Fornecedor::encargos na API:
-  // IPI = custo × alíquota; ST = (base do ICMS + IPI) × (1 + MVA) × ICMS; base vazia = o custo
-  function preco(custoTexto, fornecedorId, margemTexto, baseTexto = '') {
+  // IPI = custo × alíquota; base do ST = (custo + IPI) × (1 + MVA);
+  // ST = base do ST × ICMS − ICMS próprio (custo × ICMS)
+  function preco(custoTexto, fornecedorId, margemTexto) {
     const custo = num(custoTexto)
     const f = fornecedor(fornecedorId)
-    const base = baseTexto === '' || baseTexto === null || baseTexto === undefined ? custo : num(baseTexto)
     const ipi = (custo * num(f.ipi)) / 100
-    const st = ((base + ipi) * stPercent(f)) / 100
+    const aliquota = num(f.icms) / 100
+    const baseSt = f.stRecolhido ? 0 : (custo + ipi) * (1 + num(f.mva) / 100)
+    const icmsProprio = f.stRecolhido ? 0 : custo * aliquota
+    const st = Math.max(0, baseSt * aliquota - icmsProprio)
     const efetivo = custo + ipi + st
     const fi = faixaIndice(custo)
     const sugerida = fi < 0 ? 0 : num(faixas.value[fi].margem)
     const semMargem = margemTexto === '' || margemTexto === null || margemTexto === undefined
     const margem = semMargem ? sugerida : num(margemTexto)
-    return { custo, fornecedor: f, base, ipi, st, efetivo, faixa: fi, sugerida, margem, venda: efetivo * (1 + margem / 100) }
+    return { custo, fornecedor: f, ipi, baseSt, icmsProprio, st, efetivo, faixa: fi, sugerida, margem, venda: efetivo * (1 + margem / 100) }
   }
 
   // ---- ordens de serviço

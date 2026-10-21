@@ -237,8 +237,8 @@
           </div>
           <p class="texto-apoio">
             Custo efetivo = custo + IPI + ST, antes do markup. IPI = custo × alíquota de IPI. Quando o ST não vem recolhido:
-            ST = (base de cálculo do ICMS + IPI) × (1 + MVA) × alíquota de ICMS. A base vem da nota e é digitada no produto
-            (vazia = o custo). Ex.: base R$ 37,39, ICMS 17%, MVA 50% → ST R$ 9,53.
+            base do ST = (custo + IPI) × (1 + MVA) e ST = base do ST × alíquota de ICMS − ICMS próprio (custo × alíquota).
+            Ex.: custo R$ 53,93, ICMS 17%, MVA 50% → base do ST R$ 80,90; R$ 13,75 − R$ 9,17 = ST R$ 4,58.
             Excluir tira o fornecedor da lista; produtos que já usam ele continuam com o nome e o preço.
           </p>
 

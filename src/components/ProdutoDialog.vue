@@ -79,20 +79,6 @@
               input-class="text-right text-mono"
               class="col-6 col-sm-3 col-md-2"
             />
-            <q-input
-              v-if="!calc.fornecedor.stRecolhido"
-              v-model="form.base_icms"
-              label="Base cálc. ICMS (R$)"
-              :placeholder="form.custo || '0,00'"
-              inputmode="decimal"
-              outlined
-              dense
-              bg-color="white"
-              input-class="text-right text-mono"
-              class="col-6 col-sm-3 col-md-2"
-            >
-              <q-tooltip>Da nota fiscal (coluna "Base calc. ICMS"). Vazio = o preço de custo.</q-tooltip>
-            </q-input>
             <div class="col-12 col-md">
               <div class="rotulo-coluna q-mb-xs">ICMS / ST do fornecedor</div>
               <div class="row q-gutter-xs">
@@ -114,7 +100,9 @@
               <template v-if="calc.ipi > 0"> + IPI {{ brl(calc.ipi) }}</template>
               <template v-if="!calc.fornecedor.stRecolhido">
                 + ST {{ brl(calc.st) }}
-                <span style="font-size: 12px">(base {{ brl(calc.base) }}{{ calc.ipi > 0 ? ' + IPI' : '' }} × {{ markupTexto(num(calc.fornecedor.mva)) }} × {{ pct(num(calc.fornecedor.icms)) }})</span>
+                <span style="font-size: 12px">
+                  (base ST {{ brl(calc.baseSt) }} × {{ pct(num(calc.fornecedor.icms)) }} − ICMS próprio {{ brl(calc.icmsProprio) }})
+                </span>
               </template>
             </span>
             <strong class="text-mono">{{ brl(calc.efetivo) }}</strong>
@@ -312,7 +300,7 @@ const opcoesCategoria = computed(() => [
     .filter((c) => c.ativo || c.id === form.value?.categoria_id)
     .map((c) => ({ value: c.id, label: c.nome + (c.ativo ? '' : ' (desativada)') }))
 ])
-const calc = computed(() => store.preco(form.value.custo, form.value.fornecedor_id, form.value.margem, form.value.base_icms))
+const calc = computed(() => store.preco(form.value.custo, form.value.fornecedor_id, form.value.margem))
 const margemEditada = computed(() => !['', null, undefined].includes(form.value.margem))
 // o campo mostra markup (2,30x); o form e a API guardam margem em %.
 // o texto digitado fica guardado à parte para não ser reescrito enquanto se digita ("2," viraria "2,00")
