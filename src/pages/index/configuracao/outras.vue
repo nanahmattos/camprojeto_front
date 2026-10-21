@@ -2,7 +2,7 @@
   <q-page padding>
     <div class="pagina" :style="{ paddingBottom: alterado ? '88px' : '0' }">
       <div>
-        <h1 class="titulo-pagina">Configurações</h1>
+        <h1 class="titulo-pagina">Outras configurações</h1>
         <p class="subtitulo-pagina">Taxas por tipo de cliente, markup, ICMS/ST de fornecedor e categorias do estoque</p>
       </div>
 

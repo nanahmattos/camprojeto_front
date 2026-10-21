@@ -151,7 +151,10 @@ const linksList = computed(() => [
   {
     label: 'Configurações',
     icon: 'tune',
-    route: '/configuracao'
+    children: [
+      { label: 'Dados Empresa', icon: 'storefront', route: '/configuracao/empresa' },
+      { label: 'Outras Configurações', icon: 'settings', route: '/configuracao/outras' }
+    ]
   }
 ])
 
