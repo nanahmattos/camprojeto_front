@@ -3,13 +3,13 @@
     <div class="pagina">
       <div class="row items-end justify-between q-gutter-y-md">
         <div>
-          <h1 class="titulo-pagina">Gastos fixos</h1>
-          <p class="subtitulo-pagina">Contas da oficina: aluguel, funcionários, impostos, luz…</p>
+          <h1 class="titulo-pagina">Contas a pagar</h1>
+          <p class="subtitulo-pagina">Aluguel, funcionários, fornecedores, terceirizados, impostos, luz…</p>
         </div>
-        <q-btn unelevated no-caps color="primary" icon="add" label="Novo gasto" @click="abrir(null)" />
+        <q-btn unelevated no-caps color="primary" icon="add" label="Nova conta" @click="abrir(null)" />
       </div>
 
-      <section class="cartao q-pa-md row q-col-gutter-sm items-center" aria-label="Filtros dos gastos">
+      <section class="cartao q-pa-md row q-col-gutter-sm items-center" aria-label="Filtros das contas">
         <div class="col-12 col-sm-6 col-md-4">
           <MesSeletor v-model="mes" />
         </div>
@@ -56,13 +56,16 @@
         :loading="carregando"
         :pagination="{ rowsPerPage: 0 }"
         hide-pagination
-        :no-data-label="erro || 'Nenhum gasto neste mês.'"
+        :no-data-label="erro || 'Nenhuma conta neste mês.'"
       >
         <template #body-cell-nome="props">
           <q-td :props="props">
             <span class="text-weight-bold">{{ props.row.nome }}</span>
             <q-icon v-if="props.row.recorrencia" name="event_repeat" size="16px" color="grey-7" class="q-ml-xs">
               <q-tooltip>Repete todo mês</q-tooltip>
+            </q-icon>
+            <q-icon v-if="props.row.nota_entrada_id" name="receipt_long" size="16px" color="grey-7" class="q-ml-xs">
+              <q-tooltip>Boleto de nota de entrada</q-tooltip>
             </q-icon>
           </q-td>
         </template>
@@ -120,7 +123,7 @@
     <q-dialog v-model="dialogo.aberto" @hide="dialogo.erro = ''">
       <q-card style="width: 620px; max-width: 95vw">
         <q-card-section class="row items-center no-wrap">
-          <h2 class="titulo-secao col" style="font-size: 19px">{{ dialogo.id ? 'Editar gasto' : 'Novo gasto' }}</h2>
+          <h2 class="titulo-secao col" style="font-size: 19px">{{ dialogo.id ? 'Editar conta' : 'Nova conta' }}</h2>
           <q-btn flat round dense icon="close" aria-label="Fechar" v-close-popup />
         </q-card-section>
         <q-separator />
@@ -177,15 +180,18 @@
               </span>
             </div>
           </div>
+          <p v-else-if="dialogo.notaEntradaId" class="texto-apoio">
+            Este é o boleto de uma nota de entrada. Se a nota for alterada, emissão, vencimento, valor e nome voltam a seguir a nota.
+          </p>
           <p v-else-if="dialogo.recorrencia" class="texto-apoio">
-            Este gasto faz parte de uma cobrança que se repete. A alteração vale só para este mês.
+            Esta conta faz parte de uma cobrança que se repete. A alteração vale só para este mês.
           </p>
         </q-card-section>
 
         <q-separator />
         <q-card-actions align="right" class="q-pa-md">
           <q-btn outline no-caps color="grey-8" label="Cancelar" v-close-popup />
-          <q-btn unelevated no-caps color="primary" label="Salvar gasto" :loading="dialogo.salvando" @click="salvar" />
+          <q-btn unelevated no-caps color="primary" label="Salvar conta" :loading="dialogo.salvando" @click="salvar" />
         </q-card-actions>
       </q-card>
     </q-dialog>
@@ -268,12 +274,13 @@ async function trocarStatus(gasto, status) {
 }
 
 // ---- formulário
-const dialogo = reactive({ aberto: false, id: null, recorrencia: null, salvando: false, erro: '' })
+const dialogo = reactive({ aberto: false, id: null, recorrencia: null, notaEntradaId: null, salvando: false, erro: '' })
 const form = ref({})
 
 function abrir(gasto) {
   dialogo.id = gasto?.id ?? null
   dialogo.recorrencia = gasto?.recorrencia ?? null
+  dialogo.notaEntradaId = gasto?.nota_entrada_id ?? null
   form.value = gasto
     ? {
         data_emissao: gasto.data_emissao || '',
@@ -330,11 +337,11 @@ async function salvar() {
     const lista = Array.isArray(salvo) ? salvo : [salvo]
     dialogo.aberto = false
     $q.notify({
-      message: lista.length > 1 ? lista.length + ' lançamentos criados, um por mês.' : 'Gasto salvo.',
+      message: lista.length > 1 ? lista.length + ' lançamentos criados, um por mês.' : 'Conta salva.',
       color: 'positive',
       icon: 'check'
     })
-    // mostra o mês do gasto salvo
+    // mostra o mês da conta salva
     const mesGasto = lista[0].vencimento.slice(0, 7)
     if (mesGasto !== mes.value) mes.value = mesGasto
     else carregar()
@@ -351,7 +358,7 @@ function excluir(gasto) {
   $q.dialog({
     title: 'Excluir ' + gasto.nome + '?',
     message: repetido
-      ? 'Este gasto se repete todo mês. Excluir só o de ' + dataBr(gasto.vencimento) + ', ou este e os próximos?'
+      ? 'Esta conta se repete todo mês. Excluir só o de ' + dataBr(gasto.vencimento) + ', ou este e os próximos?'
       : 'Não dá para desfazer.',
     options: repetido
       ? {
@@ -369,7 +376,7 @@ function excluir(gasto) {
   }).onOk(async (escolha) => {
     try {
       await excluirGasto(gasto.id, escolha === 'proximos')
-      $q.notify({ message: 'Gasto excluído.', color: 'dark' })
+      $q.notify({ message: 'Conta excluída.', color: 'dark' })
       carregar()
     } catch (e) {
       $q.notify({ message: mensagemDeErro(e), color: 'negative', position: 'top' })

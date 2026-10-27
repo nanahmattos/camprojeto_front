@@ -71,6 +71,52 @@
             />
           </div>
 
+          <!-- cada parcela do boleto vira uma conta a pagar: nome = fornecedor, categoria Fornecedor, pendente, sem repetir -->
+          <div v-if="form.forma === 'boleto'" class="column q-gutter-y-sm q-pa-sm" style="border: 1px solid #eceae4; border-radius: 8px">
+            <div class="row items-center q-gutter-x-sm no-wrap">
+              <q-icon name="event_repeat" size="20px" color="grey-7" />
+              <span class="text-weight-bold">Dados do boleto</span>
+            </div>
+            <p class="texto-apoio">
+              Cada parcela vai para Contas a pagar como <strong>{{ nomeFornecedor || 'o fornecedor escolhido' }}</strong>, categoria Fornecedor, pendente.
+            </p>
+            <div class="row q-col-gutter-sm items-center">
+              <q-input
+                :model-value="form.parcelas"
+                type="number"
+                label="Parcelas *"
+                min="1"
+                :max="MAX_PARCELAS"
+                inputmode="numeric"
+                outlined
+                dense
+                input-class="text-mono"
+                class="col-6 col-sm-3 col-md-2"
+                @update:model-value="mudarParcelas"
+              />
+              <span v-if="form.parcelas > 1" class="col texto-apoio">O valor total da nota foi dividido entre as parcelas. Ajuste se precisar.</span>
+            </div>
+            <div v-for="(b, i) in form.boletos" :key="i" class="row q-col-gutter-sm items-center">
+              <span class="col-12 col-sm-auto rotulo-coluna text-mono" style="min-width: 48px">{{ i + 1 }}/{{ form.boletos.length }}</span>
+              <q-input v-model="b.data_emissao" type="date" label="Data de emissão" stack-label outlined dense class="col-12 col-sm-4 col-md-3" />
+              <q-input v-model="b.vencimento" type="date" label="Vencimento *" stack-label outlined dense class="col-6 col-sm-3 col-md-3" />
+              <q-input
+                v-model="b.valor"
+                label="Valor *"
+                prefix="R$"
+                placeholder="0,00"
+                inputmode="decimal"
+                outlined
+                dense
+                input-class="text-right text-mono"
+                class="col-6 col-sm-3 col-md-3"
+              />
+            </div>
+            <p v-if="diferencaParcelas" class="texto-apoio text-negative" role="status">
+              A soma das parcelas ({{ brl(somaParcelas) }}) não bate com o valor total da nota ({{ brl(num(form.valor_total)) }}).
+            </p>
+          </div>
+
           <div class="row justify-end q-gutter-sm">
             <q-btn outline no-caps color="grey-8" :label="editandoId ? 'Cancelar edição' : 'Limpar'" @click="limpar" />
             <q-btn unelevated no-caps color="primary" :label="editandoId ? 'Salvar alterações' : 'Salvar nota'" :loading="salvando" @click="salvar" />
@@ -122,6 +168,8 @@
           <q-td :props="props">
             {{ FORMAS_API[props.row.forma] || props.row.forma }}
             <span v-if="props.row.cartao_final" class="text-mono text-grey-8 q-ml-xs">•••• {{ props.row.cartao_final }}</span>
+            <span v-if="props.row.boletos.length > 1" class="text-grey-8 q-ml-xs">· {{ props.row.boletos.length }}x</span>
+            <span v-else-if="props.row.boletos.length" class="text-grey-8 q-ml-xs">· vence {{ dataBr(props.row.boletos[0].vencimento) }}</span>
           </q-td>
         </template>
 
@@ -222,9 +270,54 @@ const formVazio = () => ({
   requisicao: '',
   valor_total: '',
   forma: 'boleto',
-  cartao_final: ''
+  cartao_final: '',
+  parcelas: 1,
+  boletos: [{ data_emissao: hojeIso(), vencimento: '', valor: '' }]
 })
 const form = ref(formVazio())
+
+const nomeFornecedor = computed(() => store.fornecedores.find((f) => f.id === form.value.fornecedor_id)?.nome)
+
+// ---- parcelas do boleto
+const MAX_PARCELAS = 60
+
+// divide em centavos; os centavos que sobram vão nas primeiras parcelas (100 / 3 = 33,34 + 33,33 + 33,33)
+function dividirValor() {
+  const f = form.value
+  const n = f.boletos.length
+  const centavos = Math.round(num(f.valor_total) * 100)
+  if (!n || !(centavos >= 0)) return
+  const base = Math.floor(centavos / n)
+  f.boletos.forEach((b, i) => (b.valor = dec((base + (i < centavos % n ? 1 : 0)) / 100)))
+}
+
+// mudou a quantidade: mantém as parcelas que já existem, cria as que faltam e redivide o valor
+function mudarParcelas(v) {
+  const f = form.value
+  const n = Math.min(MAX_PARCELAS, Math.max(1, parseInt(v, 10) || 1))
+  f.parcelas = n
+  f.boletos = Array.from({ length: n }, (_, i) => f.boletos[i] || { data_emissao: f.data_emissao, vencimento: '', valor: '' })
+  dividirValor()
+}
+
+const somaParcelas = computed(() => form.value.boletos.reduce((s, b) => s + num(b.valor), 0))
+const diferencaParcelas = computed(
+  () => form.value.forma === 'boleto' && form.value.valor_total !== '' && Math.abs(somaParcelas.value - num(form.value.valor_total)) >= 0.005
+)
+
+// valor total e emissão da nota alimentam as parcelas (troca de formulário, ao editar outra nota, não conta)
+watch(
+  () => [form.value, form.value.valor_total],
+  ([f], [fAntes]) => f === fAntes && dividirValor()
+)
+watch(
+  () => [form.value, form.value.data_emissao],
+  ([f, novo], [fAntes, antigo]) => {
+    if (f !== fAntes) return
+    // a emissão da parcela acompanha a da nota até ser mudada à mão
+    for (const b of f.boletos) if (!b.data_emissao || b.data_emissao === antigo) b.data_emissao = novo
+  }
+)
 
 function limpar() {
   form.value = formVazio()
@@ -235,6 +328,9 @@ function limpar() {
 function editar(nota) {
   editandoId.value = nota.id
   erroForm.value = ''
+  const boletos = nota.boletos.length
+    ? nota.boletos.map((b) => ({ data_emissao: b.data_emissao || nota.data_emissao, vencimento: b.vencimento, valor: dec(b.valor) }))
+    : [{ data_emissao: nota.data_emissao, vencimento: '', valor: dec(nota.valor_total) }]
   form.value = {
     data_emissao: nota.data_emissao,
     fornecedor_id: nota.fornecedor_id,
@@ -242,7 +338,9 @@ function editar(nota) {
     requisicao: nota.requisicao || '',
     valor_total: dec(nota.valor_total),
     forma: nota.forma,
-    cartao_final: nota.cartao_final || ''
+    cartao_final: nota.cartao_final || '',
+    parcelas: boletos.length,
+    boletos
   }
   formAberto.value = true
   window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -259,6 +357,11 @@ async function salvar() {
     erroForm.value = 'O final do cartão precisa ter 4 números.'
     return
   }
+  const boleto = f.forma === 'boleto'
+  if (boleto && (!f.fornecedor_id || f.boletos.some((b) => !b.vencimento || b.valor === ''))) {
+    erroForm.value = 'No boleto, preencha o fornecedor e o vencimento e o valor de todas as parcelas.'
+    return
+  }
   salvando.value = true
   try {
     const salva = await salvarNota(editandoId.value, {
@@ -268,9 +371,12 @@ async function salvar() {
       requisicao: f.requisicao.trim() || null,
       valor_total: num(f.valor_total),
       forma: f.forma,
-      cartao_final: f.forma === 'credito' ? f.cartao_final || null : null
+      cartao_final: f.forma === 'credito' ? f.cartao_final || null : null,
+      boletos: boleto ? f.boletos.map((b) => ({ data_emissao: b.data_emissao || null, vencimento: b.vencimento, valor: num(b.valor) })) : null
     })
-    $q.notify({ message: editandoId.value ? 'Nota alterada.' : 'Nota salva.', color: 'positive', icon: 'check' })
+    const msg = editandoId.value ? 'Nota alterada.' : 'Nota salva.'
+    const extra = f.boletos.length > 1 ? ' As ' + f.boletos.length + ' parcelas estão em Contas a pagar.' : ' O boleto está em Contas a pagar.'
+    $q.notify({ message: boleto ? msg + extra : msg, color: 'positive', icon: 'check' })
     limpar()
     // mostra o mês da nota salva
     const mesNota = salva.data_emissao.slice(0, 7)
@@ -286,7 +392,12 @@ async function salvar() {
 function excluir(nota) {
   $q.dialog({
     title: 'Excluir nota ' + (nota.numero_nf || 'sem número') + '?',
-    message: (nota.fornecedor_nome ? nota.fornecedor_nome + ' · ' : '') + brl(nota.valor_total) + '. Não dá para desfazer.',
+    message:
+      (nota.fornecedor_nome ? nota.fornecedor_nome + ' · ' : '') +
+      brl(nota.valor_total) +
+      '.' +
+      (nota.boletos.length ? ' O boleto também sai de Contas a pagar.' : '') +
+      ' Não dá para desfazer.',
     ok: { label: 'Excluir', color: 'negative', unelevated: true, noCaps: true },
     cancel: { label: 'Cancelar', flat: true, noCaps: true, color: 'grey-8' },
     persistent: true

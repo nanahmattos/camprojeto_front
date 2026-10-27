@@ -12,6 +12,8 @@ export const CATEGORIAS_GASTO = {
   internet: 'Internet',
   softwares: 'Softwares',
   monitoramento: 'Monitoramento',
+  fornecedor: 'Fornecedor',
+  terceirizado: 'Terceirizado',
   outros: 'Outros'
 }
 
@@ -26,7 +28,7 @@ export function mesAtual() {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
 }
 
-// ---- gastos fixos
+// ---- contas a pagar (na API ainda se chamam gastos fixos)
 
 export async function listarGastos(filtros) {
   const { data } = await api.get('/gastos-fixos', { params: filtros })
@@ -56,6 +58,7 @@ export async function listarNotas(filtros) {
   return data // { data: [...], totais: { quantidade, total, credito, boleto } }
 }
 
+// com forma "boleto", a API cria/atualiza a conta a pagar do boleto
 export async function salvarNota(id, payload) {
   const { data } = id ? await api.put('/notas-entrada/' + id, payload) : await api.post('/notas-entrada', payload)
   return data.data

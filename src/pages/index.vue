@@ -140,12 +140,13 @@ const linksList = computed(() => [
     badge: store.qtdRepor || '',
     badgeLabel: store.qtdRepor + ' produtos para repor'
   },
-  {
+  // conta comercial não tem acesso ao financeiro
+  auth.usuario?.papel === 'admin' && {
     label: 'Financeiro',
     icon: 'account_balance_wallet',
     children: [
       { label: 'Notas Entrada', icon: 'receipt_long', route: '/financeiro/notas-entrada' },
-      { label: 'Gastos Fixos', icon: 'event_repeat', route: '/financeiro/gastos-fixos' }
+      { label: 'Contas a Pagar', icon: 'event_repeat', route: '/financeiro/contas-a-pagar' }
     ]
   },
   {
@@ -153,10 +154,11 @@ const linksList = computed(() => [
     icon: 'tune',
     children: [
       { label: 'Dados Empresa', icon: 'storefront', route: '/configuracao/empresa' },
-      { label: 'Outras Configurações', icon: 'settings', route: '/configuracao/outras' }
+      { label: 'Outras Configurações', icon: 'settings', route: '/configuracao/outras' },
+      { label: 'Minha Conta', icon: 'manage_accounts', route: '/configuracao/minha-conta' }
     ]
   }
-])
+].filter(Boolean))
 
 const leftDrawerOpen = ref(false)
 

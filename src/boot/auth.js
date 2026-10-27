@@ -25,6 +25,8 @@ export default defineBoot(({ router, store }) => {
     }
 
     if (publica) return '/'
+    // conta comercial não tem acesso ao financeiro (a API também bloqueia)
+    if (to.path.startsWith('/financeiro') && auth.usuario.papel !== 'admin') return '/'
     return true
   })
 
