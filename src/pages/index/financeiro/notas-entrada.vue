@@ -22,7 +22,7 @@
           </q-banner>
 
           <div class="row q-col-gutter-sm">
-            <q-input v-model="form.data_emissao" type="date" label="Data de emissão *" stack-label outlined dense class="col-12 col-sm-6 col-md-2" />
+            <CampoData v-model="form.data_emissao" label="Data de emissão *" stack-label outlined dense class="col-12 col-sm-6 col-md-2" />
             <q-select
               v-model="form.fornecedor_id"
               :options="opcoesFornecedor"
@@ -30,6 +30,7 @@
               emit-value
               map-options
               outlined
+              options-dense
               dense
               class="col-12 col-sm-6 col-md-4"
             />
@@ -94,14 +95,16 @@
                 class="col-6 col-sm-3 col-md-2"
                 @update:model-value="mudarParcelas"
               />
-              <span v-if="form.parcelas > 1" class="col texto-apoio">O valor total da nota foi dividido entre as parcelas. Ajuste se precisar.</span>
+              <span v-if="form.parcelas > 1" class="col texto-apoio">
+                O valor total da nota foi dividido entre as parcelas. Mudando o valor de uma, as que você não mexeu dividem o restante.
+              </span>
             </div>
             <div v-for="(b, i) in form.boletos" :key="i" class="row q-col-gutter-sm items-center">
               <span class="col-12 col-sm-auto rotulo-coluna text-mono" style="min-width: 48px">{{ i + 1 }}/{{ form.boletos.length }}</span>
-              <q-input v-model="b.data_emissao" type="date" label="Data de emissão" stack-label outlined dense class="col-12 col-sm-4 col-md-3" />
-              <q-input v-model="b.vencimento" type="date" label="Vencimento *" stack-label outlined dense class="col-6 col-sm-3 col-md-3" />
+              <CampoData v-model="b.data_emissao" label="Data de emissão" stack-label outlined dense class="col-12 col-sm-4 col-md-3" />
+              <CampoData v-model="b.vencimento" label="Vencimento *" stack-label outlined dense class="col-6 col-sm-3 col-md-3" />
               <q-input
-                v-model="b.valor"
+                :model-value="b.valor"
                 label="Valor *"
                 prefix="R$"
                 placeholder="0,00"
@@ -110,11 +113,15 @@
                 dense
                 input-class="text-right text-mono"
                 class="col-6 col-sm-3 col-md-3"
+                @update:model-value="(v) => mudarValorParcela(b, v)"
               />
             </div>
-            <p v-if="diferencaParcelas" class="texto-apoio text-negative" role="status">
-              A soma das parcelas ({{ brl(somaParcelas) }}) não bate com o valor total da nota ({{ brl(num(form.valor_total)) }}).
-            </p>
+            <div v-if="diferencaParcelas" class="row items-center q-gutter-x-sm" role="status">
+              <span class="texto-apoio text-negative">
+                A soma das parcelas ({{ brl(somaParcelas) }}) não bate com o valor total da nota ({{ brl(num(form.valor_total)) }}).
+              </span>
+              <q-btn flat dense no-caps color="primary" icon="calculate" label="Dividir por igual" @click="dividirValor" />
+            </div>
           </div>
 
           <div class="row justify-end q-gutter-sm">
@@ -207,6 +214,7 @@ import { FORMAS_API } from '@/api/ordens'
 import { FORMAS_NOTA, mesAtual, listarNotas, salvarNota, excluirNota } from '@/api/financeiro'
 import { num, brl, dec, dataBr, hojeIso } from '@/utils/formato'
 import MesSeletor from '@/components/MesSeletor.vue'
+import CampoData from '@/components/CampoData.vue'
 
 const $q = useQuasar()
 const auth = useAuthStore()
@@ -264,7 +272,7 @@ const salvando = ref(false)
 const erroForm = ref('')
 
 const formVazio = () => ({
-  data_emissao: hojeIso(),
+  data_emissao: dataBr(),
   fornecedor_id: null,
   numero_nf: '',
   requisicao: '',
@@ -281,14 +289,30 @@ const nomeFornecedor = computed(() => store.fornecedores.find((f) => f.id === fo
 // ---- parcelas do boleto
 const MAX_PARCELAS = 60
 
-// divide em centavos; os centavos que sobram vão nas primeiras parcelas (100 / 3 = 33,34 + 33,33 + 33,33)
-function dividirValor() {
+// o que falta do total (fora as parcelas mudadas à mão) é dividido entre as outras, em centavos;
+// os centavos que sobram vão nas primeiras (100 / 3 = 33,34 + 33,33 + 33,33)
+function redistribuir() {
   const f = form.value
-  const n = f.boletos.length
-  const centavos = Math.round(num(f.valor_total) * 100)
-  if (!n || !(centavos >= 0)) return
+  const livres = f.boletos.filter((b) => !b.manual)
+  if (!livres.length) return
+  const fixos = f.boletos.filter((b) => b.manual).reduce((s, b) => s + Math.round(num(b.valor) * 100), 0)
+  const centavos = Math.max(0, Math.round(num(f.valor_total) * 100) - fixos)
+  const n = livres.length
   const base = Math.floor(centavos / n)
-  f.boletos.forEach((b, i) => (b.valor = dec((base + (i < centavos % n ? 1 : 0)) / 100)))
+  livres.forEach((b, i) => (b.valor = dec((base + (i < centavos % n ? 1 : 0)) / 100)))
+}
+
+// divide o total por igual entre todas (esquece os valores mudados à mão)
+function dividirValor() {
+  form.value.boletos.forEach((b) => (b.manual = false))
+  redistribuir()
+}
+
+// mudou o valor de uma parcela: ela fica como foi digitada e as outras dividem o restante
+function mudarValorParcela(b, v) {
+  b.valor = v
+  b.manual = true
+  redistribuir()
 }
 
 // mudou a quantidade: mantém as parcelas que já existem, cria as que faltam e redivide o valor

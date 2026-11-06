@@ -2,7 +2,7 @@ import { defineBoot } from '#q-app'
 import { api } from '@/boot/axios'
 import { useAuthStore } from '@/stores/auth'
 
-const ROTAS_PUBLICAS = ['/login']
+const ROTAS_PUBLICAS = ['/login', '/redefinir-senha']
 
 export default defineBoot(({ router, store }) => {
   const auth = useAuthStore(store)
@@ -24,7 +24,8 @@ export default defineBoot(({ router, store }) => {
       }
     }
 
-    if (publica) return '/'
+    // logado não precisa do login; o link de redefinir senha abre mesmo assim
+    if (to.path === '/login') return '/'
     // conta comercial não tem acesso ao financeiro (a API também bloqueia)
     if (to.path.startsWith('/financeiro') && auth.usuario.papel !== 'admin') return '/'
     return true

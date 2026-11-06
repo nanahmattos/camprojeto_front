@@ -62,7 +62,8 @@ export const useOficinaStore = defineStore('oficina', () => {
     aplicarConfiguracoes(data)
   }
 
-  // recebe a tela inteira (só os itens ativos; o que saiu da lista é desativado pela API)
+  // recebe a tela inteira (só os itens ativos; o que saiu da lista é desativado pela API).
+  // fornecedores ficam de fora: são salvos um a um em Cadastro Fornecedores (src/api/cadastros.js)
   async function salvarConfiguracoes(c) {
     const { data } = await api.put('/configuracoes', {
       preco_auto_padrao: c.autoPadrao,
@@ -72,14 +73,6 @@ export const useOficinaStore = defineStore('oficina', () => {
         margem_percent: num(f.margem),
       })),
       tabelas_preco: c.tabelasPreco.map((t) => ({ id: t.id || null, nome: t.nome, preco_hora: num(t.preco), padrao: !!t.padrao })),
-      fornecedores: c.fornecedores.map((f) => ({
-        id: f.id || null,
-        nome: f.nome,
-        icms_percent: num(f.icms),
-        mva_percent: num(f.mva),
-        st_recolhido: !!f.stRecolhido,
-        ipi_percent: num(f.ipi),
-      })),
       categorias: c.categorias.map((cat) => ({ id: cat.id || null, nome: cat.nome })),
     })
     aplicarConfiguracoes(data)
@@ -235,6 +228,7 @@ export const useOficinaStore = defineStore('oficina', () => {
     carregarConfiguracoes,
     salvarConfiguracoes,
     tipoLabel,
+    tipoPadraoId,
     qtdRepor,
     carregarResumoEstoque,
     faixaTexto,

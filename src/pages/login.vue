@@ -27,7 +27,7 @@
         </aside>
 
         <main class="col column flex-center q-pa-lg">
-          <q-form class="login-form column q-gutter-y-md" @submit="entrar">
+          <q-form v-if="!esqueci" class="login-form column q-gutter-y-md" @submit="entrar">
             <div class="lt-md column q-mb-md">
               <span class="text-weight-bold" style="font-size: 18px">Centro Automotivo Mattos</span>
               <span class="text-grey-8" style="font-size: 13px">Gestão da oficina</span>
@@ -38,7 +38,12 @@
               <p class="subtitulo-pagina">Use o e-mail e a senha cadastrados na oficina.</p>
             </div>
 
-            <q-banner v-if="avisoSessao && !erro" dense rounded class="login-aviso">
+            <q-banner v-if="sucesso && !erro" dense rounded class="login-sucesso" role="status">
+              <template #avatar><q-icon name="mark_email_read" /></template>
+              {{ sucesso }}
+            </q-banner>
+
+            <q-banner v-else-if="avisoSessao && !erro" dense rounded class="login-aviso">
               <template #avatar><q-icon name="schedule" /></template>
               Sua sessão expirou. Entre novamente para continuar.
             </q-banner>
@@ -99,7 +104,47 @@
               :loading="carregando"
             />
 
-            <p class="texto-apoio text-center">Esqueceu a senha? Peça ao administrador da oficina para redefinir.</p>
+            <q-btn flat no-caps dense color="primary" label="Esqueci minha senha" class="self-center" @click="abrirEsqueci" />
+          </q-form>
+
+          <!-- esqueci minha senha: o administrador recebe por e-mail um link para escolher a senha nova -->
+          <q-form v-else class="login-form column q-gutter-y-md" @submit="enviarNovaSenha">
+            <div>
+              <h1 class="titulo-pagina">Esqueci minha senha</h1>
+              <p class="subtitulo-pagina">Confirme o seu e-mail. Se for de um administrador, enviamos um link para escolher uma senha nova.</p>
+            </div>
+
+            <q-banner v-if="erroEsqueci" dense rounded class="login-erro" role="alert">
+              <template #avatar><q-icon name="error_outline" /></template>
+              {{ erroEsqueci }}
+            </q-banner>
+
+            <q-input
+              v-model="emailEsqueci"
+              type="email"
+              label="E-mail"
+              autocomplete="username"
+              autofocus
+              outlined
+              bg-color="white"
+              @update:model-value="erroEsqueci = ''"
+            >
+              <template #prepend><q-icon name="mail_outline" /></template>
+            </q-input>
+
+            <q-btn
+              type="submit"
+              unelevated
+              no-caps
+              color="primary"
+              label="Enviar link"
+              size="16px"
+              class="full-width"
+              style="min-height: 48px"
+              :loading="enviando"
+            />
+
+            <q-btn flat no-caps dense color="grey-8" icon="arrow_back" label="Voltar para o login" class="self-center" @click="esqueci = false" />
           </q-form>
         </main>
       </q-page>
@@ -111,7 +156,7 @@
 import { ref, reactive, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { mensagemDeErro } from '@/boot/axios'
+import { api, mensagemDeErro } from '@/boot/axios'
 
 const route = useRoute()
 const router = useRouter()
@@ -125,6 +170,44 @@ const erro = ref('')
 const errosCampo = reactive({ email: '', senha: '' })
 
 const avisoSessao = computed(() => route.query.expirou === '1')
+
+// ---- esqueci minha senha
+const esqueci = ref(false)
+const emailEsqueci = ref('')
+const erroEsqueci = ref('')
+const enviando = ref(false)
+// voltou da página de redefinir senha (link do e-mail): e-mail já preenchido
+const sucesso = ref(route.query.redefinida === '1' ? 'Senha redefinida. Entre com a senha nova.' : '')
+if (typeof route.query.email === 'string') email.value = route.query.email
+
+function abrirEsqueci() {
+  emailEsqueci.value = email.value.trim()
+  erroEsqueci.value = ''
+  esqueci.value = true
+}
+
+async function enviarNovaSenha() {
+  erroEsqueci.value = ''
+  if (!emailEsqueci.value.trim()) {
+    erroEsqueci.value = 'Informe o e-mail.'
+    return
+  }
+  enviando.value = true
+  try {
+    const { data } = await api.post('/esqueci-senha', { email: emailEsqueci.value.trim() })
+    // volta para o login com o e-mail preenchido; a senha atual segue valendo até o link ser usado
+    email.value = emailEsqueci.value.trim()
+    senha.value = ''
+    limparErros()
+    sucesso.value = data.message + ' Abra o link para escolher a senha nova.'
+    esqueci.value = false
+  } catch (e) {
+    // "Conta não existente", "Peça para seu adm redefinir"…
+    erroEsqueci.value = mensagemDeErro(e)
+  } finally {
+    enviando.value = false
+  }
+}
 
 function limparErros() {
   erro.value = ''
@@ -199,6 +282,11 @@ async function entrar() {
 .login-erro {
   background: #f4d7d3;
   color: #8b2214;
+}
+
+.login-sucesso {
+  background: #dfeccb;
+  color: #2f4a0c;
 }
 
 .login-aviso {

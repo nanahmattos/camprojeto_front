@@ -34,8 +34,8 @@
             dense
             class="col-12 col-sm-4 col-md-3"
           />
-          <q-input v-model="dataDe" type="date" label="Data de" stack-label outlined dense class="col-6 col-sm-4 col-md-2" />
-          <q-input v-model="dataAte" type="date" label="Data até" stack-label outlined dense class="col-6 col-sm-4 col-md-2" />
+          <CampoData v-model="dataDe" label="Data de" stack-label outlined dense class="col-6 col-sm-4 col-md-2" />
+          <CampoData v-model="dataAte" label="Data até" stack-label outlined dense class="col-6 col-sm-4 col-md-2" />
         </div>
 
         <div class="row items-center q-gutter-sm">
@@ -183,6 +183,7 @@ import { listarOrdens, excluirOrdem, confirmarExclusao, numeroOS, STATUS_API } f
 import { useAuthStore } from '@/stores/auth'
 import { brl, dataBr } from '@/utils/formato'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
+import CampoData from '@/components/CampoData.vue'
 
 const $q = useQuasar()
 const router = useRouter()

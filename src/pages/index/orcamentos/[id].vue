@@ -34,7 +34,7 @@
         <h2 class="titulo-secao">Cabeçalho</h2>
         <div class="row q-col-gutter-sm">
           <q-input :model-value="numeroOS(os.numero) || 'novo'" label="Nº da O.S" readonly outlined dense input-class="text-mono" class="col-6 col-sm-3 col-md-1" />
-          <q-input v-model="os.data" type="date" label="Data" stack-label outlined dense class="col-6 col-sm-3 col-md-2" />
+          <CampoData v-model="os.data" label="Data" stack-label outlined dense class="col-6 col-sm-3 col-md-2" />
           <q-input
             :model-value="os.cliente"
             label="Cliente"
@@ -403,9 +403,8 @@
             class="col-6 col-sm-3 col-md-2"
             @update:model-value="mudarParcelas"
           />
-          <q-input
+          <CampoData
             :model-value="os.pagamento.data"
-            type="date"
             label="Data (1ª parcela)"
             stack-label
             outlined
@@ -445,7 +444,7 @@
               style="grid-template-columns: 80px 170px 150px 160px minmax(0, 1fr)"
             >
               <span class="text-mono text-weight-bold">{{ i + 1 }}/{{ os.pagamento.lista.length }}</span>
-              <q-input v-model="pg.data" type="date" aria-label="Data da parcela" outlined dense />
+              <CampoData v-model="pg.data" aria-label="Data da parcela" outlined dense />
               <q-input v-model="pg.valor" aria-label="Valor da parcela" inputmode="decimal" outlined dense input-class="text-right text-mono" />
               <q-select v-model="pg.forma" :options="FORMAS_PAGAMENTO" aria-label="Forma de pagamento" outlined dense />
               <q-input v-model="pg.obs" aria-label="Observação da parcela" outlined dense />
@@ -506,6 +505,7 @@ import { num, brl, dec, pct } from '@/utils/formato'
 import ProdutoDialog from '@/components/ProdutoDialog.vue'
 import UnidadeSelect from '@/components/UnidadeSelect.vue'
 import ImprimirDialog from '@/components/ImprimirDialog.vue'
+import CampoData from '@/components/CampoData.vue'
 
 const $q = useQuasar()
 const route = useRoute()

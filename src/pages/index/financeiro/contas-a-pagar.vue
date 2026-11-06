@@ -135,8 +135,8 @@
           </q-banner>
 
           <div class="row q-col-gutter-sm">
-            <q-input v-model="form.data_emissao" type="date" label="Data de emissão" stack-label outlined dense class="col-6" />
-            <q-input v-model="form.vencimento" type="date" label="Vencimento *" stack-label outlined dense class="col-6" />
+            <CampoData v-model="form.data_emissao" label="Data de emissão" stack-label outlined dense class="col-6" />
+            <CampoData v-model="form.vencimento" label="Vencimento *" stack-label outlined dense class="col-6" />
             <q-input v-model="form.nome" label="Nome *" placeholder="Ex.: Aluguel do galpão" outlined dense maxlength="150" class="col-12" />
             <q-select
               v-model="form.categoria"
@@ -165,9 +165,8 @@
           <div v-if="!dialogo.id" class="column q-gutter-y-sm q-pa-sm" style="border: 1px solid #eceae4; border-radius: 8px">
             <q-checkbox v-model="form.repetir" label="Essa cobrança ocorre todo mês, na mesma data de vencimento" />
             <div v-if="form.repetir" class="row q-col-gutter-sm items-center">
-              <q-input
+              <CampoData
                 v-model="form.repetir_ate"
-                type="date"
                 label="Repetir até *"
                 stack-label
                 outlined
@@ -214,6 +213,7 @@ import {
 } from '@/api/financeiro'
 import { num, brl, dec, dataBr, hojeIso, addMonths } from '@/utils/formato'
 import MesSeletor from '@/components/MesSeletor.vue'
+import CampoData from '@/components/CampoData.vue'
 
 const $q = useQuasar()
 const auth = useAuthStore()

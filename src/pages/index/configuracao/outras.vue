@@ -3,7 +3,7 @@
     <div class="pagina" :style="{ paddingBottom: alterado ? '88px' : '0' }">
       <div>
         <h1 class="titulo-pagina">Outras configurações</h1>
-        <p class="subtitulo-pagina">Taxas por tipo de cliente, markup, ICMS/ST de fornecedor e categorias do estoque</p>
+        <p class="subtitulo-pagina">Taxas por tipo de cliente, markup, preço da hora e categorias do estoque</p>
       </div>
 
       <q-banner v-if="!podeEditar" dense rounded class="bg-grey-3 text-grey-9">
@@ -222,121 +222,6 @@
           </div>
         </div>
 
-        <section class="cartao q-pa-md column q-gutter-y-sm" aria-label="Fornecedores">
-          <div class="row items-center justify-between">
-            <h2 class="titulo-secao">Fornecedores e ICMS / ST</h2>
-            <q-btn
-              v-if="podeEditar"
-              outline
-              no-caps
-              color="grey-8"
-              icon="add"
-              label="Adicionar fornecedor"
-              @click="adicionarFornecedor"
-            />
-          </div>
-          <p class="texto-apoio">
-            Custo efetivo = custo + IPI + ST, antes do markup. IPI = custo × alíquota de IPI. Quando o ST não vem recolhido:
-            base do ST = (custo + IPI) × (1 + MVA) e ST = base do ST × alíquota de ICMS − ICMS próprio (custo × alíquota).
-            Ex.: custo R$ 53,93, ICMS 17%, MVA 50% → base do ST R$ 80,90; R$ 13,75 − R$ 9,17 = ST R$ 4,58.
-            Excluir tira o fornecedor da lista; produtos que já usam ele continuam com o nome e o preço.
-          </p>
-
-          <p v-if="!form.fornecedores.length" class="texto-apoio q-py-md text-center">
-            Nenhum fornecedor cadastrado ainda.
-          </p>
-
-          <div v-else class="rolagem-x">
-            <div style="min-width: 800px" class="column q-gutter-y-xs">
-              <div class="grade grade-cabecalho" :style="{ gridTemplateColumns: colunasFornecedor }">
-                <span class="rotulo-coluna">Fornecedor</span>
-                <span class="rotulo-coluna">Aliq. ICMS</span>
-                <span class="rotulo-coluna">MVA</span>
-                <span class="rotulo-coluna">ST já recolhido?</span>
-                <span class="rotulo-coluna">Aliq. IPI</span>
-                <span class="rotulo-coluna text-right">ST sobre a base</span>
-                <span></span>
-              </div>
-              <div
-                v-for="(f, i) in form.fornecedores"
-                :key="f.id || 'novo' + i"
-                class="grade"
-                :style="{ gridTemplateColumns: colunasFornecedor }"
-              >
-                <q-input
-                  v-model="f.nome"
-                  aria-label="Nome do fornecedor"
-                  placeholder="Nome do fornecedor"
-                  outlined
-                  dense
-                  :readonly="!podeEditar"
-                  :autofocus="!f.id && i === form.fornecedores.length - 1"
-                />
-                <q-input
-                  v-model="f.icms"
-                  :aria-label="'Alíquota de ICMS de ' + (f.nome || 'novo fornecedor')"
-                  inputmode="decimal"
-                  suffix="%"
-                  outlined
-                  dense
-                  :readonly="!podeEditar"
-                  input-class="text-right text-mono"
-                />
-                <q-input
-                  v-model="f.mva"
-                  :aria-label="'MVA de ' + (f.nome || 'novo fornecedor')"
-                  inputmode="decimal"
-                  suffix="%"
-                  outlined
-                  dense
-                  :readonly="!podeEditar"
-                  input-class="text-right text-mono"
-                />
-                <q-btn-toggle
-                  v-model="f.stRecolhido"
-                  :options="[
-                    { label: 'Sim', value: true },
-                    { label: 'Não', value: false }
-                  ]"
-                  :disable="!podeEditar"
-                  no-caps
-                  unelevated
-                  dense
-                  toggle-color="dark"
-                  color="grey-3"
-                  text-color="grey-9"
-                  class="self-center"
-                  :aria-label="'ST já recolhido? ' + (f.nome || 'novo fornecedor')"
-                />
-                <q-input
-                  v-model="f.ipi"
-                  :aria-label="'Alíquota de IPI de ' + (f.nome || 'novo fornecedor')"
-                  inputmode="decimal"
-                  suffix="%"
-                  outlined
-                  dense
-                  :readonly="!podeEditar"
-                  input-class="text-right text-mono"
-                />
-                <span class="text-mono text-weight-bold text-right" style="font-size: 14px">
-                  <template v-if="f.stRecolhido"><span class="text-grey-7 text-weight-regular">já recolhido</span></template>
-                  <template v-else>+{{ pct(store.stPercent(f)) }}</template>
-                </span>
-                <q-btn
-                  v-if="podeEditar"
-                  flat
-                  round
-                  dense
-                  icon="delete_outline"
-                  color="grey-8"
-                  :aria-label="'Excluir fornecedor ' + (f.nome || 'novo')"
-                  @click="form.fornecedores.splice(i, 1)"
-                />
-                <span v-else></span>
-              </div>
-            </div>
-          </div>
-        </section>
       </template>
     </div>
 
@@ -358,13 +243,11 @@ import { useQuasar } from 'quasar'
 import { useOficinaStore } from '@/stores/oficina'
 import { useAuthStore } from '@/stores/auth'
 import { mensagemDeErro } from '@/boot/axios'
-import { num, brl, pct, markupTexto, margemDoMarkup, paraTexto } from '@/utils/formato'
+import { num, brl, markupTexto, margemDoMarkup, paraTexto } from '@/utils/formato'
 
 const $q = useQuasar()
 const store = useOficinaStore()
 const auth = useAuthStore()
-
-const colunasFornecedor = 'minmax(200px, 1fr) 110px 110px 120px 110px 130px 40px'
 
 const podeEditar = computed(() => auth.usuario?.papel === 'admin')
 
@@ -381,7 +264,6 @@ function copiaDoStore() {
       tabelasPreco: store.tabelasAtivas,
       // a tela edita markup (2,30x); o store e a API guardam margem em %
       faixas: store.faixas.map((f) => ({ ate: f.ate, markup: markupTexto(num(f.margem)) })),
-      fornecedores: store.fornecedoresAtivos,
       categorias: store.categoriasAtivas
     })
   )
@@ -434,10 +316,6 @@ function removerTabela(i) {
 
 function adicionarCategoria() {
   form.value.categorias.push({ id: null, nome: '', ativo: true })
-}
-
-function adicionarFornecedor() {
-  form.value.fornecedores.push({ id: null, nome: '', icms: '0', mva: '0', stRecolhido: true, ipi: '0', ativo: true })
 }
 
 async function salvar() {

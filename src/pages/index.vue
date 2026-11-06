@@ -154,6 +154,8 @@ const linksList = computed(() => [
     icon: 'tune',
     children: [
       { label: 'Dados Empresa', icon: 'storefront', route: '/configuracao/empresa' },
+      { label: 'Cadastro Fornecedores', icon: 'local_shipping', route: '/configuracao/fornecedores' },
+      { label: 'Cadastro Clientes', icon: 'groups', route: '/configuracao/clientes' },
       { label: 'Outras Configurações', icon: 'settings', route: '/configuracao/outras' },
       { label: 'Minha Conta', icon: 'manage_accounts', route: '/configuracao/minha-conta' }
     ]
