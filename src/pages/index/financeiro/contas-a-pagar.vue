@@ -64,9 +64,10 @@
             <q-icon v-if="props.row.recorrencia" name="event_repeat" size="16px" color="grey-7" class="q-ml-xs">
               <q-tooltip>Repete todo mês</q-tooltip>
             </q-icon>
-            <q-icon v-if="props.row.nota_entrada_id" name="receipt_long" size="16px" color="grey-7" class="q-ml-xs">
-              <q-tooltip>Boleto de nota de entrada</q-tooltip>
+            <q-icon v-if="props.row.fatura" name="receipt_long" size="16px" color="grey-7" class="q-ml-xs">
+              <q-tooltip>{{ textoFatura(props.row.fatura) }}</q-tooltip>
             </q-icon>
+            <div v-if="props.row.fatura" class="texto-apoio" style="font-size: 12px">{{ notasDaFatura(props.row.fatura) }}</div>
           </q-td>
         </template>
 
@@ -179,8 +180,13 @@
               </span>
             </div>
           </div>
-          <p v-else-if="dialogo.notaEntradaId" class="texto-apoio">
-            Este é o boleto de uma nota de entrada. Se a nota for alterada, emissão, vencimento, valor e nome voltam a seguir a nota.
+          <p v-else-if="dialogo.fatura" class="texto-apoio">
+            {{ textoFatura(dialogo.fatura) }}.
+            {{
+              dialogo.fatura.da_nota
+                ? 'Se a nota for alterada, emissão, vencimento, valor e nome voltam a seguir a nota.'
+                : 'Se a fatura for alterada (em Financeiro > Faturas), emissão, vencimento, valor e nome voltam a seguir a fatura.'
+            }}
           </p>
           <p v-else-if="dialogo.recorrencia" class="texto-apoio">
             Esta conta faz parte de uma cobrança que se repete. A alteração vale só para este mês.
@@ -242,6 +248,11 @@ const colunas = [
   { name: 'acoes', label: '', field: 'id', align: 'right' }
 ]
 
+// boleto de fornecedor: da própria nota ou de uma fatura com várias notas
+const notasDaFatura = (f) => (f.notas.length > 1 ? 'NFs ' : 'NF ') + (f.notas.join(', ') || 'sem nº')
+const textoFatura = (f) =>
+  f.da_nota ? 'Boleto da nota de entrada ' + notasDaFatura(f) : 'Boleto da fatura nº ' + f.numero + ' (' + notasDaFatura(f) + ')'
+
 async function carregar() {
   carregando.value = true
   erro.value = ''
@@ -274,13 +285,13 @@ async function trocarStatus(gasto, status) {
 }
 
 // ---- formulário
-const dialogo = reactive({ aberto: false, id: null, recorrencia: null, notaEntradaId: null, salvando: false, erro: '' })
+const dialogo = reactive({ aberto: false, id: null, recorrencia: null, fatura: null, salvando: false, erro: '' })
 const form = ref({})
 
 function abrir(gasto) {
   dialogo.id = gasto?.id ?? null
   dialogo.recorrencia = gasto?.recorrencia ?? null
-  dialogo.notaEntradaId = gasto?.nota_entrada_id ?? null
+  dialogo.fatura = gasto?.fatura ?? null
   form.value = gasto
     ? {
         data_emissao: gasto.data_emissao || '',

@@ -146,6 +146,7 @@ const linksList = computed(() => [
     icon: 'account_balance_wallet',
     children: [
       { label: 'Notas Entrada', icon: 'receipt_long', route: '/financeiro/notas-entrada' },
+      { label: 'Faturas', icon: 'request_quote', route: '/financeiro/faturas' },
       { label: 'Contas a Pagar', icon: 'event_repeat', route: '/financeiro/contas-a-pagar' }
     ]
   },

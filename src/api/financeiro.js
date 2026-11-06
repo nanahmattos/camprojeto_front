@@ -55,10 +55,10 @@ export async function excluirGasto(id, proximos = false) {
 
 export async function listarNotas(filtros) {
   const { data } = await api.get('/notas-entrada', { params: filtros })
-  return data // { data: [...], totais: { quantidade, total, credito, boleto } }
+  return data // { data: [...], totais: { quantidade, total, credito, boleto, aguardando: { quantidade, total } } }
 }
 
-// com forma "boleto", a API cria/atualiza a conta a pagar do boleto
+// boleto com parcelas: a API cria/atualiza as contas a pagar; boleto_depois: a nota fica aguardando boleto
 export async function salvarNota(id, payload) {
   const { data } = id ? await api.put('/notas-entrada/' + id, payload) : await api.post('/notas-entrada', payload)
   return data.data
@@ -66,4 +66,27 @@ export async function salvarNota(id, payload) {
 
 export async function excluirNota(id) {
   await api.delete('/notas-entrada/' + id)
+}
+
+// ---- faturas: o fornecedor junta várias notas (aguardando boleto) e manda os boletos depois
+
+export async function listarFaturas(filtros) {
+  const { data } = await api.get('/faturas', { params: filtros })
+  return data.data
+}
+
+// notas do fornecedor com boleto que ainda não estão em nenhuma fatura
+export async function notasAguardando(fornecedorId) {
+  const { data } = await api.get('/faturas/notas-aguardando', { params: { fornecedor_id: fornecedorId } })
+  return data.data
+}
+
+// cada parcela vira uma conta a pagar; notas que saem voltam a aguardar boleto
+export async function salvarFatura(id, payload) {
+  const { data } = id ? await api.put('/faturas/' + id, payload) : await api.post('/faturas', payload)
+  return data.data
+}
+
+export async function excluirFatura(id) {
+  await api.delete('/faturas/' + id)
 }
