@@ -21,10 +21,11 @@ export function gravarToken(token) {
 }
 
 // em desenvolvimento, /api passa pelo proxy do quasar.config.js até o Laravel;
-// em produção, defina VITE_API_URL com o endereço da API
+// em produção, defina VITE_API_URL com o endereço da API.
+// a API roda atrás do túnel do ngrok: o cabeçalho pula a página de aviso que ele mostra a navegadores
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api',
-  headers: { Accept: 'application/json' }
+  headers: { Accept: 'application/json', 'ngrok-skip-browser-warning': '1' }
 })
 
 api.interceptors.request.use((config) => {
