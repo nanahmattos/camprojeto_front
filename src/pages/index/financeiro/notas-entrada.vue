@@ -102,11 +102,33 @@
                 <p class="texto-apoio">
                   Cada parcela vai para Contas a pagar como <strong>{{ nomeFornecedor || 'o fornecedor escolhido' }}</strong>, categoria Fornecedor, pendente.
                 </p>
+                <!-- crédito de devolução: o fornecedor desconta no boleto; as parcelas dividem o restante -->
+                <div v-if="form.forma === COM_CREDITO" class="row q-col-gutter-sm items-center">
+                  <q-input
+                    v-model="form.credito"
+                    label="Crédito de devolução *"
+                    prefix="R$"
+                    placeholder="0,00"
+                    inputmode="decimal"
+                    outlined
+                    dense
+                    input-class="text-right text-mono"
+                    class="col-12 col-sm-6 col-md-3"
+                  />
+                  <span v-if="quitadaComCredito" class="col texto-apoio">
+                    O crédito cobre a nota inteira: <strong>não tem boleto</strong> e nada vai para Contas a pagar.
+                  </span>
+                  <span v-else class="col texto-apoio">
+                    Nota de {{ brl(num(form.valor_total)) }} − crédito de {{ brl(num(form.credito)) }} =
+                    <strong class="text-mono">{{ brl(valorBoleto) }}</strong> no boleto.
+                  </span>
+                </div>
                 <ParcelasBoleto
+                  v-if="!quitadaComCredito"
                   v-model="form.boletos"
-                  :total="num(form.valor_total)"
+                  :total="valorBoleto"
                   :emissao="form.data_emissao"
-                  rotulo-total="valor total da nota"
+                  :rotulo-total="form.forma === COM_CREDITO ? 'valor da nota menos o crédito' : 'valor total da nota'"
                 />
               </template>
             </template>
@@ -177,11 +199,13 @@
       >
         <template #body-cell-forma="props">
           <q-td :props="props">
-            {{ formaDaNota(props.row) === AGRUPADO ? 'Boleto agrupado' : FORMAS_API[props.row.forma] || props.row.forma }}
+            {{ ROTULO_FORMA[formaDaNota(props.row)] || FORMAS_API[props.row.forma] || props.row.forma }}
+            <span v-if="props.row.credito_devolucao" class="text-mono text-grey-8 q-ml-xs">· −{{ brl(props.row.credito_devolucao) }}</span>
             <span v-if="props.row.cartao_final" class="text-mono text-grey-8 q-ml-xs">•••• {{ props.row.cartao_final }}</span>
             <span v-if="props.row.boletos.length > 1" class="text-grey-8 q-ml-xs">· {{ props.row.boletos.length }}x</span>
             <span v-else-if="props.row.boletos.length" class="text-grey-8 q-ml-xs">· vence {{ dataBr(props.row.boletos[0].vencimento) }}</span>
-            <q-badge v-if="props.row.aguardando_boleto" color="warning" text-color="dark" class="q-ml-xs">Aguardando boleto</q-badge>
+            <q-badge v-if="props.row.paga_com_credito" color="green-1" text-color="positive" class="q-ml-xs">Paga com crédito</q-badge>
+            <q-badge v-else-if="props.row.aguardando_boleto" color="warning" text-color="dark" class="q-ml-xs">Aguardando boleto</q-badge>
             <q-badge v-else-if="props.row.fatura && !props.row.fatura.da_nota" color="blue-1" text-color="blue-10" class="q-ml-xs">
               Fatura nº {{ props.row.fatura.numero }}
             </q-badge>
@@ -220,7 +244,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useOficinaStore } from '@/stores/oficina'
 import { FORMAS_API } from '@/api/ordens'
 import { FORMAS_NOTA, mesAtual, listarNotas, salvarNota, excluirNota } from '@/api/financeiro'
-import { num, brl, dec, dataBr, hojeIso } from '@/utils/formato'
+import { num, brl, dec, dataBr } from '@/utils/formato'
 import MesSeletor from '@/components/MesSeletor.vue'
 import CampoData from '@/components/CampoData.vue'
 import ParcelasBoleto from '@/components/ParcelasBoleto.vue'
@@ -238,15 +262,28 @@ const soAguardando = ref(false)
 const carregando = ref(false)
 const erro = ref('')
 
-// "Boleto agrupado" só existe na tela: para a API é boleto que aguarda a fatura (boleto_depois)
+// "Boleto agrupado" e "Boleto c/ crédito" só existem na tela:
+// para a API, agrupado é boleto que aguarda a fatura (boleto_depois) e c/ crédito é boleto com credito_devolucao
 const AGRUPADO = 'boleto_agrupado'
-const ehBoleto = (forma) => forma === 'boleto' || forma === AGRUPADO
+const COM_CREDITO = 'boleto_credito'
+const temBoletoProprio = (forma) => forma === 'boleto' || forma === COM_CREDITO
+const ehBoleto = (forma) => temBoletoProprio(forma) || forma === AGRUPADO
 const opcoesForma = Object.entries(FORMAS_NOTA).flatMap(([value, label]) =>
-  value === 'boleto' ? [{ value, label }, { value: AGRUPADO, label: 'Boleto agrupado (vem depois)' }] : [{ value, label }]
+  value === 'boleto'
+    ? [
+        { value, label },
+        { value: COM_CREDITO, label: 'Boleto c/ crédito (devolução)' },
+        { value: AGRUPADO, label: 'Boleto agrupado (vem depois)' }
+      ]
+    : [{ value, label }]
 )
-// aguardando boleto ou numa fatura agrupada
-const formaDaNota = (nota) =>
-  nota.forma === 'boleto' && (nota.aguardando_boleto || (nota.fatura && !nota.fatura.da_nota)) ? AGRUPADO : nota.forma
+// aguardando boleto ou numa fatura agrupada; boleto da nota com desconto de devolução
+const formaDaNota = (nota) => {
+  if (nota.forma !== 'boleto') return nota.forma
+  if (nota.aguardando_boleto || (nota.fatura && !nota.fatura.da_nota)) return AGRUPADO
+  return nota.credito_devolucao ? COM_CREDITO : 'boleto'
+}
+const ROTULO_FORMA = { [AGRUPADO]: 'Boleto agrupado', [COM_CREDITO]: 'Boleto c/ crédito' }
 // fornecedores ativos; o da nota entra mesmo se tiver sido desativado
 const opcoesFornecedor = computed(() => [
   { value: null, label: 'Sem fornecedor' },
@@ -298,10 +335,20 @@ const formVazio = () => ({
   valor_total: '',
   forma: 'boleto',
   cartao_final: '',
+  credito: '',
   fatura: null,
-  boletos: [{ data_emissao: hojeIso(), vencimento: '', valor: '' }]
+  // a emissão da parcela começa igual à da nota (vazia) para acompanhá-la quando a nota for preenchida
+  boletos: [{ data_emissao: '', vencimento: '', valor: '' }]
 })
 const form = ref(formVazio())
+
+// o que sai em boleto: a nota inteira, ou a nota menos o crédito de devolução
+const valorBoleto = computed(() => {
+  const total = num(form.value.valor_total)
+  return form.value.forma === COM_CREDITO ? Math.max(0, Math.round((total - num(form.value.credito)) * 100) / 100) : total
+})
+// o crédito de devolução cobre a nota inteira: não tem boleto
+const quitadaComCredito = computed(() => form.value.forma === COM_CREDITO && num(form.value.credito) > 0 && valorBoleto.value === 0)
 
 const nomeFornecedor = computed(() => store.fornecedores.find((f) => f.id === form.value.fornecedor_id)?.nome)
 
@@ -319,7 +366,7 @@ function editar(nota) {
   erroForm.value = ''
   const boletos = nota.boletos.length
     ? nota.boletos.map((b) => ({ data_emissao: b.data_emissao || nota.data_emissao, vencimento: b.vencimento, valor: dec(b.valor) }))
-    : [{ data_emissao: nota.data_emissao, vencimento: '', valor: dec(nota.valor_total) }]
+    : [{ data_emissao: nota.data_emissao, vencimento: '', valor: dec(nota.valor_total - (nota.credito_devolucao || 0)) }]
   form.value = {
     data_emissao: nota.data_emissao,
     fornecedor_id: nota.fornecedor_id,
@@ -328,6 +375,7 @@ function editar(nota) {
     valor_total: dec(nota.valor_total),
     forma: formaDaNota(nota),
     cartao_final: nota.cartao_final || '',
+    credito: nota.credito_devolucao ? dec(nota.credito_devolucao) : '',
     fatura: nota.fatura,
     boletos
   }
@@ -346,10 +394,15 @@ async function salvar() {
     erroForm.value = 'O final do cartão precisa ter 4 números.'
     return
   }
-  // parcelas só no boleto da própria nota
-  const boleto = f.forma === 'boleto'
+  // parcelas só no boleto da própria nota (e se o crédito não cobrir a nota toda)
+  const comCredito = f.forma === COM_CREDITO
+  const boleto = temBoletoProprio(f.forma) && !quitadaComCredito.value
   if (ehBoleto(f.forma) && !f.fornecedor_id) {
     erroForm.value = 'No boleto, escolha o fornecedor.'
+    return
+  }
+  if (comCredito && (num(f.credito) <= 0 || num(f.credito) > num(f.valor_total))) {
+    erroForm.value = 'Informe o crédito de devolução: maior que zero e até o valor total da nota.'
     return
   }
   if (boleto && f.boletos.some((b) => !b.vencimento || b.valor === '')) {
@@ -364,6 +417,7 @@ async function salvar() {
       numero_nf: f.numero_nf.trim() || null,
       requisicao: f.requisicao.trim() || null,
       valor_total: num(f.valor_total),
+      credito_devolucao: comCredito ? num(f.credito) : null,
       forma: ehBoleto(f.forma) ? 'boleto' : f.forma,
       cartao_final: f.forma === 'credito' ? f.cartao_final || null : null,
       boleto_depois: f.forma === AGRUPADO,
@@ -371,7 +425,12 @@ async function salvar() {
     })
     const msg = editandoId.value ? 'Nota alterada.' : 'Nota salva.'
     const extra = f.boletos.length > 1 ? ' As ' + f.boletos.length + ' parcelas estão em Contas a pagar.' : ' O boleto está em Contas a pagar.'
-    const aguardando = f.forma === AGRUPADO && !naFaturaAgrupada.value ? ' Ela fica aguardando boleto.' : ''
+    const aguardando =
+      f.forma === AGRUPADO && !naFaturaAgrupada.value
+        ? ' Ela fica aguardando boleto.'
+        : comCredito
+          ? ' Paga com o crédito de devolução, sem boleto.'
+          : ''
     $q.notify({ message: msg + (boleto ? extra : aguardando), color: 'positive', icon: 'check' })
     limpar()
     // mostra o mês da nota salva
