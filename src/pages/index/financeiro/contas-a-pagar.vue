@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="pagina">
+    <div class="pagina pagina-com-tabela">
       <div class="row items-end justify-between q-gutter-y-md">
         <div>
           <h1 class="titulo-pagina">Contas a pagar</h1>
@@ -9,10 +9,41 @@
         <q-btn unelevated no-caps color="primary" icon="add" label="Nova conta" @click="abrir(null)" />
       </div>
 
-      <section class="cartao q-pa-md row q-col-gutter-sm items-center" aria-label="Filtros das contas">
-        <div class="col-12 col-sm-6 col-md-4">
-          <MesSeletor v-model="mes" />
-        </div>
+      <!-- período pelo vencimento; status filtra só a lista (os totais mostram o período todo) -->
+      <!-- tudo numa linha; em tela estreita quebra para a de baixo -->
+      <section class="cartao q-pa-md filtros-linha" aria-label="Filtros das contas">
+        <q-btn-toggle
+          v-model="periodo"
+          :options="opcoesPeriodo"
+          no-caps
+          unelevated
+          dense
+          toggle-color="primary"
+          color="grey-2"
+          text-color="grey-9"
+          class="filtro-toggle"
+          aria-label="Período pelo vencimento"
+        />
+        <MesSeletor v-if="periodo === 'mes'" v-model="mes" class="filtro-mes" />
+        <template v-else-if="periodo === 'data'">
+          <CampoData v-model="dataDe" label="Vencimento de" stack-label outlined dense class="filtro-data" />
+          <CampoData v-model="dataAte" label="até" stack-label outlined dense :min="dataDe || undefined" class="filtro-data" />
+        </template>
+        <span v-else class="texto-apoio">
+          Vencimento em <strong class="text-mono">{{ dataBr(diaFiltro) }}</strong>
+        </span>
+        <q-btn-toggle
+          v-model="filtroStatus"
+          :options="opcoesFiltroStatus"
+          no-caps
+          unelevated
+          dense
+          toggle-color="primary"
+          color="grey-2"
+          text-color="grey-9"
+          class="filtro-toggle"
+          aria-label="Status"
+        />
         <q-select
           v-model="filtroCategoria"
           :options="opcoesFiltroCategoria"
@@ -21,14 +52,14 @@
           map-options
           outlined
           dense
-          class="col-12 col-sm-6 col-md-3"
+          class="filtro-categoria"
         />
       </section>
 
-      <div class="row q-col-gutter-md" aria-label="Totais do mês">
+      <div class="row q-col-gutter-md" :aria-label="'Totais ' + rotuloPeriodo">
         <div class="col-12 col-sm-4">
           <div class="cartao q-pa-md column">
-            <span class="rotulo-coluna">Total no mês</span>
+            <span class="rotulo-coluna">Total {{ rotuloPeriodo }}</span>
             <strong class="text-mono" style="font-size: 22px">{{ brl(totais.total) }}</strong>
           </div>
         </div>
@@ -47,16 +78,17 @@
       </div>
 
       <q-table
-        :rows="gastos"
+        :rows="gastosVisiveis"
         :columns="colunas"
         row-key="id"
         flat
         bordered
-        class="tabela-oficina"
+        class="tabela-oficina tabela-clicavel tabela-rolagem"
         :loading="carregando"
+        @row-click="(_, row) => abrir(row)"
         :pagination="{ rowsPerPage: 0 }"
         hide-pagination
-        :no-data-label="erro || 'Nenhuma conta neste mês.'"
+        :no-data-label="erro || semContas"
       >
         <template #body-cell-nome="props">
           <q-td :props="props">
@@ -67,7 +99,9 @@
             <q-icon v-if="props.row.fatura" name="receipt_long" size="16px" color="grey-7" class="q-ml-xs">
               <q-tooltip>{{ textoFatura(props.row.fatura) }}</q-tooltip>
             </q-icon>
-            <div v-if="props.row.fatura" class="texto-apoio" style="font-size: 12px">{{ notasDaFatura(props.row.fatura) }}</div>
+            <div v-if="props.row.fatura" class="texto-apoio" style="font-size: 12px">
+              {{ notasDaFatura(props.row.fatura) }}
+            </div>
           </q-td>
         </template>
 
@@ -75,8 +109,9 @@
           <q-td :props="props" class="text-mono text-weight-bold">{{ props.value }}</q-td>
         </template>
 
+        <!-- o status não abre a edição da linha -->
         <template #body-cell-status="props">
-          <q-td :props="props">
+          <q-td :props="props" @click.stop>
             <q-select
               :model-value="props.row.status"
               :options="opcoesStatus"
@@ -95,27 +130,13 @@
           </q-td>
         </template>
 
-        <template #body-cell-acoes="props">
-          <q-td :props="props">
-            <q-btn flat round dense icon="edit" color="grey-8" :aria-label="'Editar ' + props.row.nome" @click="abrir(props.row)" />
-            <q-btn
-              v-if="ehAdmin"
-              flat
-              round
-              dense
-              icon="delete_outline"
-              color="negative"
-              :aria-label="'Excluir ' + props.row.nome"
-              @click="excluir(props.row)"
-            />
-          </q-td>
-        </template>
-
-        <template v-if="gastos.length" #bottom-row>
-          <q-tr class="text-weight-bold">
-            <q-td colspan="4" class="text-right">Total</q-td>
-            <q-td class="text-right text-mono">{{ brl(totais.total) }}</q-td>
-            <q-td colspan="2"></q-td>
+        <template v-if="gastosVisiveis.length" #bottom-row>
+          <q-tr class="text-weight-bold linha-total">
+            <q-td colspan="4" class="text-right"
+              >Total{{ filtroStatus ? ' ' + opcoesFiltroStatus.find((o) => o.value === filtroStatus).label.toLowerCase() : '' }}</q-td
+            >
+            <q-td class="text-right text-mono">{{ brl(totalVisivel) }}</q-td>
+            <q-td></q-td>
           </q-tr>
         </template>
       </q-table>
@@ -124,7 +145,9 @@
     <q-dialog v-model="dialogo.aberto" @hide="dialogo.erro = ''">
       <q-card style="width: 620px; max-width: 95vw">
         <q-card-section class="row items-center no-wrap">
-          <h2 class="titulo-secao col" style="font-size: 19px">{{ dialogo.id ? 'Editar conta' : 'Nova conta' }}</h2>
+          <h2 class="titulo-secao col" style="font-size: 19px">
+            {{ dialogo.id ? 'Editar conta' : 'Nova conta' }}
+          </h2>
           <q-btn flat round dense icon="close" aria-label="Fechar" v-close-popup />
         </q-card-section>
         <q-separator />
@@ -195,6 +218,17 @@
 
         <q-separator />
         <q-card-actions align="right" class="q-pa-md">
+          <!-- excluir fica na edição, à esquerda, longe do Salvar -->
+          <q-btn
+            v-if="dialogo.id && ehAdmin"
+            flat
+            no-caps
+            color="negative"
+            icon="delete_outline"
+            label="Excluir conta"
+            @click="excluir(dialogo.gasto)"
+          />
+          <q-space />
           <q-btn outline no-caps color="grey-8" label="Cancelar" v-close-popup />
           <q-btn unelevated no-caps color="primary" label="Salvar conta" :loading="dialogo.salvando" @click="salvar" />
         </q-card-actions>
@@ -208,15 +242,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { mensagemDeErro } from '@/boot/axios'
 import { useAuthStore } from '@/stores/auth'
-import {
-  CATEGORIAS_GASTO,
-  STATUS_GASTO,
-  mesAtual,
-  listarGastos,
-  salvarGasto,
-  mudarStatusGasto,
-  excluirGasto
-} from '@/api/financeiro'
+import { CATEGORIAS_GASTO, STATUS_GASTO, mesAtual, listarGastos, salvarGasto, mudarStatusGasto, excluirGasto } from '@/api/financeiro'
 import { num, brl, dec, dataBr, hojeIso, addMonths } from '@/utils/formato'
 import MesSeletor from '@/components/MesSeletor.vue'
 import CampoData from '@/components/CampoData.vue'
@@ -225,7 +251,37 @@ const $q = useQuasar()
 const auth = useAuthStore()
 const ehAdmin = computed(() => auth.usuario?.papel === 'admin')
 
+// período pelo vencimento: mês, hoje, ontem ou entre datas
+const periodo = ref('mes')
+const opcoesPeriodo = [
+  { value: 'mes', label: 'Mês' },
+  { value: 'hoje', label: 'Hoje' },
+  { value: 'ontem', label: 'Ontem' },
+  { value: 'data', label: 'Data' },
+]
 const mes = ref(mesAtual())
+const dataDe = ref(hojeIso())
+const dataAte = ref(hojeIso())
+const ontemIso = () => {
+  const d = new Date()
+  d.setDate(d.getDate() - 1)
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')
+}
+// dia de "hoje" / "ontem"
+const diaFiltro = computed(() => (periodo.value === 'ontem' ? ontemIso() : hojeIso()))
+const rotuloPeriodo = computed(() => {
+  if (periodo.value === 'mes') return 'no mês'
+  if (periodo.value === 'hoje') return 'de hoje'
+  if (periodo.value === 'ontem') return 'de ontem'
+  return 'no período'
+})
+
+const filtroStatus = ref(null)
+const opcoesFiltroStatus = [
+  { value: null, label: 'Todas' },
+  { value: 'pendente', label: 'Pendentes' },
+  { value: 'pago', label: 'Pagas' },
+]
 const filtroCategoria = ref(null)
 const gastos = ref([])
 const totais = ref({ total: 0, pendente: 0, pago: 0 })
@@ -239,13 +295,31 @@ const opcoesFiltroCategoria = [{ value: null, label: 'Todas' }, ...opcoesCategor
 const opcoesStatus = paraOpcoes(STATUS_GASTO)
 
 const colunas = [
-  { name: 'vencimento', label: 'Vencimento', field: 'vencimento', format: dataBr, align: 'left', classes: 'text-mono' },
-  { name: 'data_emissao', label: 'Emissão', field: 'data_emissao', format: (v) => dataBr(v) || '—', align: 'left', classes: 'text-mono text-grey-8' },
+  {
+    name: 'vencimento',
+    label: 'Vencimento',
+    field: 'vencimento',
+    format: dataBr,
+    align: 'left',
+    classes: 'text-mono',
+  },
+  {
+    name: 'data_emissao',
+    label: 'Emissão',
+    field: 'data_emissao',
+    format: (v) => dataBr(v) || '—',
+    align: 'left',
+    classes: 'text-mono text-grey-8',
+  },
   { name: 'nome', label: 'Nome', field: 'nome', align: 'left' },
-  { name: 'categoria', label: 'Categoria', field: (g) => CATEGORIAS_GASTO[g.categoria] || g.categoria, align: 'left' },
+  {
+    name: 'categoria',
+    label: 'Categoria',
+    field: (g) => CATEGORIAS_GASTO[g.categoria] || g.categoria,
+    align: 'left',
+  },
   { name: 'valor', label: 'Valor', field: 'valor', format: brl, align: 'right' },
   { name: 'status', label: 'Status', field: 'status', align: 'left' },
-  { name: 'acoes', label: '', field: 'id', align: 'right' }
 ]
 
 // boleto de fornecedor: da própria nota ou de uma fatura com várias notas
@@ -253,11 +327,32 @@ const notasDaFatura = (f) => (f.notas.length > 1 ? 'NFs ' : 'NF ') + (f.notas.jo
 const textoFatura = (f) =>
   f.da_nota ? 'Boleto da nota de entrada ' + notasDaFatura(f) : 'Boleto da fatura nº ' + f.numero + ' (' + notasDaFatura(f) + ')'
 
+// status filtra aqui mesmo: os cards de total, pendentes e pagos continuam mostrando o período todo
+const gastosVisiveis = computed(() => (filtroStatus.value ? gastos.value.filter((g) => g.status === filtroStatus.value) : gastos.value))
+const totalVisivel = computed(() => gastosVisiveis.value.reduce((s, g) => s + g.valor, 0))
+const semContas = computed(() => {
+  const status = filtroStatus.value === 'pago' ? ' paga' : filtroStatus.value === 'pendente' ? ' pendente' : ''
+  return 'Nenhuma conta' + status + ' ' + (periodo.value === 'mes' ? 'neste mês' : rotuloPeriodo.value) + '.'
+})
+
+function filtrosPeriodo() {
+  if (periodo.value === 'mes') return { mes: mes.value }
+  if (periodo.value === 'data') {
+    // data final vazia ou antes da inicial: só o dia inicial
+    const de = dataDe.value || hojeIso()
+    return { de, ate: dataAte.value && dataAte.value >= de ? dataAte.value : de }
+  }
+  return { de: diaFiltro.value }
+}
+
 async function carregar() {
   carregando.value = true
   erro.value = ''
   try {
-    const r = await listarGastos({ mes: mes.value, categoria: filtroCategoria.value || undefined })
+    const r = await listarGastos({
+      ...filtrosPeriodo(),
+      categoria: filtroCategoria.value || undefined,
+    })
     gastos.value = r.data
     totais.value = r.totais
   } catch (e) {
@@ -269,7 +364,7 @@ async function carregar() {
   }
 }
 
-watch([mes, filtroCategoria], carregar)
+watch([periodo, mes, dataDe, dataAte, filtroCategoria], carregar)
 onMounted(carregar)
 
 async function trocarStatus(gasto, status) {
@@ -285,11 +380,20 @@ async function trocarStatus(gasto, status) {
 }
 
 // ---- formulário
-const dialogo = reactive({ aberto: false, id: null, recorrencia: null, fatura: null, salvando: false, erro: '' })
+const dialogo = reactive({
+  aberto: false,
+  id: null,
+  gasto: null,
+  recorrencia: null,
+  fatura: null,
+  salvando: false,
+  erro: '',
+})
 const form = ref({})
 
 function abrir(gasto) {
   dialogo.id = gasto?.id ?? null
+  dialogo.gasto = gasto ?? null
   dialogo.recorrencia = gasto?.recorrencia ?? null
   dialogo.fatura = gasto?.fatura ?? null
   form.value = gasto
@@ -301,9 +405,18 @@ function abrir(gasto) {
         valor: dec(gasto.valor),
         status: gasto.status,
         repetir: false,
-        repetir_ate: ''
+        repetir_ate: '',
       }
-    : { data_emissao: hojeIso(), vencimento: '', nome: '', categoria: null, valor: '', status: 'pendente', repetir: false, repetir_ate: '' }
+    : {
+        data_emissao: hojeIso(),
+        vencimento: '',
+        nome: '',
+        categoria: null,
+        valor: '',
+        status: 'pendente',
+        repetir: false,
+        repetir_ate: '',
+      }
   dialogo.aberto = true
 }
 
@@ -343,18 +456,18 @@ async function salvar() {
       categoria: f.categoria,
       valor: num(f.valor),
       status: f.status,
-      repetir_ate: !dialogo.id && f.repetir ? f.repetir_ate : undefined
+      repetir_ate: !dialogo.id && f.repetir ? f.repetir_ate : undefined,
     })
     const lista = Array.isArray(salvo) ? salvo : [salvo]
     dialogo.aberto = false
     $q.notify({
       message: lista.length > 1 ? lista.length + ' lançamentos criados, um por mês.' : 'Conta salva.',
       color: 'positive',
-      icon: 'check'
+      icon: 'check',
     })
-    // mostra o mês da conta salva
+    // no filtro por mês, mostra o mês da conta salva
     const mesGasto = lista[0].vencimento.slice(0, 7)
-    if (mesGasto !== mes.value) mes.value = mesGasto
+    if (periodo.value === 'mes' && mesGasto !== mes.value) mes.value = mesGasto
     else carregar()
   } catch (e) {
     dialogo.erro = mensagemDeErro(e)
@@ -377,16 +490,17 @@ function excluir(gasto) {
           model: 'este',
           items: [
             { label: 'Só este mês', value: 'este' },
-            { label: 'Este e os próximos meses', value: 'proximos' }
-          ]
+            { label: 'Este e os próximos meses', value: 'proximos' },
+          ],
         }
       : undefined,
     ok: { label: 'Excluir', color: 'negative', unelevated: true, noCaps: true },
     cancel: { label: 'Cancelar', flat: true, noCaps: true, color: 'grey-8' },
-    persistent: true
+    persistent: true,
   }).onOk(async (escolha) => {
     try {
       await excluirGasto(gasto.id, escolha === 'proximos')
+      dialogo.aberto = false
       $q.notify({ message: 'Conta excluída.', color: 'dark' })
       carregar()
     } catch (e) {
@@ -395,3 +509,94 @@ function excluir(gasto) {
   })
 }
 </script>
+
+<style lang="scss" scoped>
+// clicar na linha abre a edição
+.tabela-clicavel :deep(tbody tr:not(.linha-total)) {
+  cursor: pointer;
+}
+
+// a tabela rola por dentro: cabeçalho e total ficam fixos.
+// celular/tablet: no máximo a altura da tela (menos a barra do topo e o respiro da página)
+.tabela-rolagem {
+  max-height: calc(100dvh - 50px - 32px);
+  min-height: 240px;
+
+  :deep(thead tr th) {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #faf9f6;
+  }
+
+  :deep(.linha-total td) {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: #fff;
+    border-top: 1px solid #dad8d2;
+  }
+
+  // barra de carregamento abaixo do cabeçalho fixo
+  &.q-table--loading :deep(thead tr:last-child th) {
+    top: 48px;
+  }
+}
+
+// computador (sem barra no topo): a página ocupa a janela e a tabela fica com o espaço que sobra
+@media (min-width: 1024px) {
+  .pagina-com-tabela {
+    height: calc(100dvh - 32px);
+  }
+
+  .tabela-rolagem {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 280px;
+  }
+}
+
+.filtros-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.filtro-mes {
+  width: 230px;
+}
+
+.filtro-data {
+  width: 150px;
+}
+
+.filtro-categoria {
+  width: 180px;
+  margin-left: auto;
+}
+
+// celular: cada filtro ocupa a largura toda
+@media (max-width: 599px) {
+  .filtro-mes,
+  .filtro-categoria {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .filtro-data {
+    flex: 1 1 0;
+  }
+}
+
+.filtro-toggle {
+  border: 1px solid #dad8d2;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 40px;
+
+  :deep(.q-btn) {
+    padding: 4px 14px;
+  }
+}
+</style>
