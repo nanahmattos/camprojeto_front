@@ -97,6 +97,46 @@ body {
   }
 }
 
+// tabela que rola por dentro: cabeçalho (e a linha .linha-total, se tiver) ficam fixos.
+// celular/tablet: no máximo a altura da tela (menos a barra do topo e o respiro da página)
+.tabela-rolagem {
+  max-height: calc(100dvh - 50px - 32px);
+  min-height: 240px;
+
+  thead tr th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #faf9f6;
+  }
+
+  .linha-total td {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    background: #fff;
+    border-top: 1px solid #dad8d2;
+  }
+
+  // barra de carregamento abaixo do cabeçalho fixo
+  &.q-table--loading thead tr:last-child th {
+    top: 48px;
+  }
+}
+
+// computador (sem barra no topo): a .pagina-com-tabela ocupa a janela e a tabela fica com o espaço que sobra
+@media (min-width: 1024px) {
+  .pagina-com-tabela {
+    height: calc(100dvh - 32px);
+  }
+
+  .pagina-com-tabela .tabela-rolagem {
+    flex: 1 1 0;
+    max-height: none;
+    min-height: 280px;
+  }
+}
+
 .placa {
   display: inline-block;
   padding: 3px 6px;

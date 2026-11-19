@@ -1,6 +1,7 @@
 <template>
   <q-page padding>
-    <div class="pagina">
+    <!-- com o formulário aberto a página cresce normalmente; fechado, a tabela fica com o resto da janela -->
+    <div class="pagina" :class="{ 'pagina-com-tabela': !formAberto }">
       <div>
         <h1 class="titulo-pagina">Notas de entrada</h1>
         <p class="subtitulo-pagina">Compras de fornecedor: NF-e / DANFCe, requisição e forma de pagamento</p>
@@ -145,34 +146,55 @@
         <div class="col-12 col-sm-6 col-md-4">
           <MesSeletor v-if="!soAguardando" v-model="mes" />
         </div>
+        <q-select
+          v-model="filtroFornecedor"
+          :options="opcoesFiltroFornecedorVisiveis"
+          label="Fornecedor"
+          emit-value
+          map-options
+          outlined
+          dense
+          options-dense
+          use-input
+          input-debounce="0"
+          class="col-12 col-sm-6 col-md-3"
+          @filter="filtrarFornecedores"
+        >
+          <template #no-option>
+            <q-item><q-item-section class="text-grey-7">Nenhum fornecedor encontrado</q-item-section></q-item>
+          </template>
+        </q-select>
         <q-toggle v-model="soAguardando" label="Só aguardando boleto (todos os meses)" color="warning" class="col-12 col-sm-auto" />
       </section>
 
       <div class="row q-col-gutter-md" aria-label="Totais do mês">
-        <div class="col-12 col-sm-6 col-md-3">
-          <div class="cartao q-pa-md column">
+        <!-- os quatro cards com a mesma largura, altura e linhas (rótulo, valor, quantidade) -->
+        <div class="col-6 col-md-3">
+          <div class="cartao q-pa-md column full-height">
             <span class="rotulo-coluna">Notas no mês</span>
             <strong class="text-mono" style="font-size: 22px">{{ brl(totais.total) }}</strong>
             <span class="texto-apoio">{{ totais.quantidade }} nota(s)</span>
           </div>
         </div>
-        <div class="col-6 col-sm-6 col-md-3">
-          <div class="cartao q-pa-md column">
+        <div class="col-6 col-md-3">
+          <div class="cartao q-pa-md column full-height">
             <span class="rotulo-coluna">No cartão de crédito</span>
             <strong class="text-mono" style="font-size: 22px">{{ brl(totais.credito) }}</strong>
+            <span class="texto-apoio">{{ qtdCredito }} nota(s)</span>
           </div>
         </div>
-        <div class="col-6 col-sm-6 col-md-3">
-          <div class="cartao q-pa-md column">
+        <div class="col-6 col-md-3">
+          <div class="cartao q-pa-md column full-height">
             <span class="rotulo-coluna">Em boletos</span>
             <strong class="text-mono" style="font-size: 22px">{{ brl(totais.boleto) }}</strong>
+            <span class="texto-apoio">{{ qtdBoleto }} nota(s)</span>
           </div>
         </div>
         <!-- de todos os meses: dívida que ainda não está em Contas a pagar -->
-        <div class="col-6 col-sm-6 col-md-3">
+        <div class="col-6 col-md-3">
           <button
             type="button"
-            class="cartao q-pa-md column full-width text-left cursor-pointer cartao-aguardando"
+            class="cartao q-pa-md column full-width full-height text-left cursor-pointer cartao-aguardando"
             :aria-pressed="soAguardando"
             @click="soAguardando = !soAguardando"
           >
@@ -191,7 +213,7 @@
         row-key="id"
         flat
         bordered
-        class="tabela-oficina"
+        class="tabela-oficina tabela-rolagem"
         :loading="carregando"
         :pagination="{ rowsPerPage: 0 }"
         hide-pagination
@@ -292,6 +314,22 @@ const opcoesFornecedor = computed(() => [
     .map((f) => ({ value: f.id, label: f.nome + (f.ativo ? '' : ' (desativado)') }))
 ])
 
+// filtro da lista: todos os fornecedores (os desativados também, para ver notas antigas); 0 = sem fornecedor
+const filtroFornecedor = ref(null)
+const opcoesFiltroFornecedor = computed(() => [
+  { value: null, label: 'Todos' },
+  { value: 0, label: 'Sem fornecedor' },
+  ...store.fornecedores.map((f) => ({ value: f.id, label: f.nome + (f.ativo ? '' : ' (desativado)') }))
+])
+const buscaFornecedor = ref('')
+const opcoesFiltroFornecedorVisiveis = computed(() => {
+  const t = buscaFornecedor.value.toLowerCase()
+  return t ? opcoesFiltroFornecedor.value.filter((o) => o.label.toLowerCase().includes(t)) : opcoesFiltroFornecedor.value
+})
+function filtrarFornecedores(texto, pronto) {
+  pronto(() => (buscaFornecedor.value = texto))
+}
+
 const colunas = [
   { name: 'data_emissao', label: 'Emissão', field: 'data_emissao', format: dataBr, align: 'left', classes: 'text-mono' },
   { name: 'fornecedor', label: 'Fornecedor', field: (n) => n.fornecedor_nome || '—', align: 'left' },
@@ -306,7 +344,8 @@ async function carregar() {
   carregando.value = true
   erro.value = ''
   try {
-    const r = await listarNotas(soAguardando.value ? { aguardando: 1 } : { mes: mes.value })
+    const fornecedor = filtroFornecedor.value === null ? {} : { fornecedor_id: filtroFornecedor.value }
+    const r = await listarNotas({ ...(soAguardando.value ? { aguardando: 1 } : { mes: mes.value }), ...fornecedor })
     notas.value = r.data
     totais.value = r.totais
   } catch (e) {
@@ -318,7 +357,11 @@ async function carregar() {
   }
 }
 
-watch([mes, soAguardando], carregar)
+watch([mes, soAguardando, filtroFornecedor], carregar)
+
+// quantidade de notas de cada card (as mesmas que a API soma em totais.credito e totais.boleto)
+const qtdCredito = computed(() => notas.value.filter((n) => n.forma === 'credito').length)
+const qtdBoleto = computed(() => notas.value.filter((n) => n.forma === 'boleto').length)
 onMounted(carregar)
 
 // ---- formulário (no topo da página)

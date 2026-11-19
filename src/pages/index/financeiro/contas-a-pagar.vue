@@ -516,45 +516,7 @@ function excluir(gasto) {
   cursor: pointer;
 }
 
-// a tabela rola por dentro: cabeçalho e total ficam fixos.
-// celular/tablet: no máximo a altura da tela (menos a barra do topo e o respiro da página)
-.tabela-rolagem {
-  max-height: calc(100dvh - 50px - 32px);
-  min-height: 240px;
-
-  :deep(thead tr th) {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background: #faf9f6;
-  }
-
-  :deep(.linha-total td) {
-    position: sticky;
-    bottom: 0;
-    z-index: 1;
-    background: #fff;
-    border-top: 1px solid #dad8d2;
-  }
-
-  // barra de carregamento abaixo do cabeçalho fixo
-  &.q-table--loading :deep(thead tr:last-child th) {
-    top: 48px;
-  }
-}
-
-// computador (sem barra no topo): a página ocupa a janela e a tabela fica com o espaço que sobra
-@media (min-width: 1024px) {
-  .pagina-com-tabela {
-    height: calc(100dvh - 32px);
-  }
-
-  .tabela-rolagem {
-    flex: 1 1 0;
-    max-height: none;
-    min-height: 280px;
-  }
-}
+// rolagem da tabela (.tabela-rolagem / .pagina-com-tabela): em src/css/app.scss
 
 .filtros-linha {
   display: flex;
